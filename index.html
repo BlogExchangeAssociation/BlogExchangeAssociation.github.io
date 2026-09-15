@@ -2,25 +2,35 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <!-- 移动端适配：微信内置浏览器 / 手机 Safari / Chrome 均依赖此标签 -->
+  <!-- 移动端适配：微信内置浏览器 / 手机 Safari / Chrome 均依赖此标签。
+       注意：不要加 user-scalable=no —— 那会禁止用户缩放，是可访问性事故。 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>博客交流协会 · 独立博客导航</title>
-  <meta name="description" content="博客交流协会：收录独立博客，分享搭建经验，欢迎交流与提交。" />
-  <meta name="theme-color" content="#4f46e5" />
+  <title>博客交流协会 · 收录独立博客，分享搭建经验</title>
+  <meta name="description" content="博客交流协会：收录群友的独立博客，分享搭建经验，欢迎交流与提交。" />
+  <meta name="theme-color" content="#fffaf7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1d1e20" media="(prefers-color-scheme: dark)" />
+
+  <!-- 社交分享卡片：微信 / QQ 转发时显示成卡片而不是一串网址，直接决定被转发的观感 -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="博客交流协会" />
+  <meta property="og:title" content="博客交流协会 · 独立博客导航" />
+  <meta property="og:description" content="收录群友的独立博客，分享搭建经验，欢迎交流与提交。" />
+  <meta property="og:url" content="https://blogexchangeassociation.github.io/" />
 
   <!-- ===== 样式：Tailwind CSS（CDN 版，无需打包工具） ===== -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <script>
     /*
-     * 在 Tailwind 生效前同步执行：
-     * 1) 配置 Tailwind（开启 class 模式的暗色主题）
-     * 2) 读取用户上次选择的主题，避免页面闪烁（FOUC）
+     * 在 Tailwind 生效前同步执行，避免页面闪烁（FOUC）：
+     * 主题有三态 —— system（跟随系统，默认）/ light / dark，存在 localStorage。
      */
     (function () {
       var saved = null;
-      try { saved = localStorage.getItem('blog-theme'); } catch (e) { /* 隐私模式下可能抛错，忽略 */ }
-      if (saved === 'dark') document.documentElement.classList.add('dark');
+      try { saved = localStorage.getItem('bex-theme'); } catch (e) { /* 隐私模式下会抛错 */ }
+      var dark = saved === 'dark' ||
+        (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('dark');
     })();
 
     tailwind.config = {
@@ -28,192 +38,304 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"',
-                   '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif']
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto',
+                   '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif']
           }
         }
       }
     };
   </script>
 
-  <!-- 少量自定义样式：骨架屏动画、卡片进场、细滚动条 -->
+  <!-- 自定义样式：骨架屏、卡片入场、横向标签条、随机卡片等 -->
   <style type="text/tailwindcss">
     @layer utilities {
-      /* 加载中的骨架屏微光效果 */
+      /* ---------- 骨架屏微光 ---------- */
       @keyframes shimmer { 100% { transform: translateX(100%); } }
       .skeleton { position: relative; overflow: hidden; }
       .skeleton::after {
         content: ''; position: absolute; inset: 0; transform: translateX(-100%);
-        background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,.45) 60%, rgba(255,255,255,0) 100%);
+        background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,.5) 60%, rgba(255,255,255,0) 100%);
         animation: shimmer 1.4s infinite;
       }
-      /* 卡片淡入上浮 */
-      @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-      .fade-up { animation: fadeUp .35s ease-out both; }
-      /* 简介最多显示 3 行，超出省略（line-clamp 兜底，兼容较旧的 Tailwind CDN） */
-      .line-clamp-3 {
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+      .dark .skeleton::after {
+        background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,.06) 60%, rgba(255,255,255,0) 100%);
       }
-      /* 隐藏 type=search 的原生清除按钮，统一使用自定义按钮 */
+
+      /* ---------- 条目淡入 ---------- */
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      .fade-up { animation: fadeUp .3s ease-out both; }
+
+      /* ---------- 横向可滑标签条：隐藏滚动条但保留滑动 ---------- */
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+
+      /* ---------- 卡片视图的双层虚线错位反馈（做法学自 diygod.cc/friends，纯 CSS 零 JS） ---------- */
+      .card-lift { position: relative; }
+      .card-lift::before {           /* 下层虚线：向右下偏移 */
+        content: ''; position: absolute; inset: 0; border-radius: 1rem;
+        border: 1.5px dashed #fdba74; opacity: 0;
+        transition: transform .25s ease, opacity .25s ease;
+      }
+      .dark .card-lift::before { border-color: #9a3412; }
+      .card-lift:hover::before { transform: translate(5px, 5px); opacity: 1; }
+      /* 箭头飞入 */
+      .card-arrow { transition: transform .25s ease, opacity .25s ease; transform: translate(-4px, 4px) rotate(-45deg); opacity: 0; }
+      .card-lift:hover .card-arrow { transform: none; opacity: 1; }
+
+      /* ---------- 随机卡片弹层 ---------- */
+      .modal-mask { background: rgba(31, 45, 43, .45); backdrop-filter: blur(2px); }
+      @keyframes popIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+      .pop-in { animation: popIn .22s cubic-bezier(.2, .8, .3, 1) both; }
+
+      /* ---------- 简介省略行数 ---------- */
+      .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+      /* ---------- 隐藏 type=search 的原生清除按钮，统一用自定义按钮 ---------- */
       input[type='search']::-webkit-search-decoration,
       input[type='search']::-webkit-search-cancel-button,
       input[type='search']::-webkit-search-results-button,
       input[type='search']::-webkit-search-results-decoration { -webkit-appearance: none; appearance: none; }
-      /* 尊重系统的「减少动态效果」偏好 */
+
+      /* ---------- 尊重系统的「减少动态效果」偏好 ---------- */
       @media (prefers-reduced-motion: reduce) {
-        .skeleton::after, .fade-up { animation: none !important; }
+        .skeleton::after, .fade-up, .pop-in { animation: none !important; }
+        .card-lift::before, .card-arrow { transition: none !important; }
       }
     }
   </style>
 </head>
 
-<body class="min-h-screen bg-slate-50 text-slate-800 antialiased
-             dark:bg-slate-950 dark:text-slate-200
-             flex flex-col transition-colors duration-300">
+<body class="flex min-h-screen flex-col bg-[#fffaf7] text-[#1f2d2b] antialiased
+             dark:bg-[#1d1e20] dark:text-[#dadadb]">
 
-  <!-- ===================== 1. 头部区域 ===================== -->
-  <header class="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white">
-    <!-- 背景装饰光斑（纯装饰，屏幕阅读器忽略） -->
-    <div aria-hidden="true" class="pointer-events-none absolute -top-24 -left-16 h-64 w-64 rounded-full bg-white/20 blur-3xl"></div>
-    <div aria-hidden="true" class="pointer-events-none absolute -bottom-28 -right-10 h-72 w-72 rounded-full bg-sky-300/25 blur-3xl"></div>
+  <!-- ===================== 1. 头部 =====================
+       设计说明：放弃 v1 的高饱和三色渐变（那是模板站的视觉签名），
+       改用暖色浅块 + 单一强调色，头部高度在手机上压到 ~170px，
+       让第一屏能露出 2-3 个博客条目。 -->
+  <header class="relative overflow-hidden border-b border-[#efe4da] bg-gradient-to-b from-[#fff7ed] to-[#fffaf7]
+                 dark:border-[#333333] dark:from-[#242427] dark:to-[#1d1e20]">
+    <div class="mx-auto w-full max-w-3xl px-4 pb-5 pt-4 sm:px-6 sm:pb-8 sm:pt-10">
 
-    <div class="relative mx-auto w-full max-w-6xl px-4 pb-12 pt-8 sm:px-6 sm:pb-16 sm:pt-10 lg:px-8">
-      <!-- 右上角：主题切换 -->
+      <!-- 主题切换 -->
       <div class="flex justify-end">
-        <button id="theme-toggle" type="button" title="切换深色 / 浅色主题" aria-label="切换深色 / 浅色主题"
-                class="rounded-full border border-white/30 bg-white/10 p-2.5 backdrop-blur transition hover:bg-white/20
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95">
-          <!-- 浅色模式下显示月亮（点击进入深色） -->
-          <svg id="icon-moon" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        <button id="theme-toggle" type="button" title="切换主题"
+                aria-label="切换主题（跟随系统 / 浅色 / 深色）"
+                class="rounded-full border border-[#efe4da] bg-white/70 p-2 text-[#5c6b69] transition
+                       hover:border-[#c2410c]/40 hover:text-[#c2410c] active:scale-95
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40
+                       dark:border-[#3a3a40] dark:bg-white/5 dark:text-[#9b9c9d]
+                       dark:hover:border-[#fb923c]/40 dark:hover:text-[#fb923c]">
+          <!-- system：显示器图标 -->
+          <svg id="icon-system" class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="4" width="20" height="14" rx="2" /><path d="M8 21h8M12 18v3" />
           </svg>
-          <!-- 深色模式下显示太阳 -->
-          <svg id="icon-sun" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <!-- light：太阳 -->
+          <svg id="icon-sun" class="hidden h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+          </svg>
+          <!-- dark：月亮 -->
+          <svg id="icon-moon" class="hidden h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
           </svg>
         </button>
       </div>
 
-      <!-- 标题与简介 -->
-      <div class="mt-2 text-center sm:mt-0">
-        <h1 class="text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-5xl">
+      <!-- 标题 / 简介 / 规模声明 -->
+      <div class="-mt-5 text-center sm:-mt-8">
+        <h1 class="text-2xl font-black tracking-tight text-[#c2410c] sm:text-4xl dark:text-[#fb923c]">
           博客交流协会
         </h1>
-        <p class="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-white/90 sm:mt-4 sm:text-base">
+        <p class="mx-auto mt-1.5 max-w-xl text-sm leading-relaxed text-[#5c6b69] sm:mt-2 sm:text-base dark:text-[#9b9c9d]">
           收录独立博客，分享搭建经验，欢迎交流与提交
         </p>
-        <!-- 统计信息：由 JS 填充 -->
-        <p id="site-stats" class="mt-4 text-xs text-white/75 sm:text-sm"></p>
+        <!-- 规模与活跃度声明：调研显示这是目录站最重要的可信度锚点 -->
+        <p id="site-stats" class="mt-2 text-xs text-[#8a9694] sm:mt-3 dark:text-[#6b6c6d]"></p>
       </div>
     </div>
   </header>
 
-  <!-- ===================== 2. 工具栏（搜索 + 标签筛选） ===================== -->
-  <!-- sticky + 毛玻璃：手机端滚动时始终可用 -->
-  <div class="sticky top-0 z-30 border-b border-slate-200/70 bg-slate-50/85 backdrop-blur
-              dark:border-slate-800 dark:bg-slate-950/85">
-    <div class="mx-auto w-full max-w-6xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-      <div class="flex flex-col gap-3">
+  <!-- ===================== 2. 工具栏（sticky） ===================== -->
+  <div class="sticky top-0 z-30 border-b border-[#efe4da] bg-[#fffaf7]/90 backdrop-blur
+              dark:border-[#333333] dark:bg-[#1d1e20]/90">
+    <div class="mx-auto w-full max-w-3xl px-4 py-3 sm:px-6">
 
-        <!-- 搜索框 -->
-        <div class="relative">
+      <!-- 第一行：搜索 + 随机 + 视图切换 -->
+      <div class="flex items-center gap-2">
+        <div class="relative min-w-0 flex-1">
           <label for="search-input" class="sr-only">搜索博客</label>
-          <svg class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9694]"
                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
           </svg>
           <input id="search-input" type="search" autocomplete="off" enterkeyhint="search"
-                 placeholder="搜索博客名称、作者或简介…"
-                 class="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-11 text-sm shadow-sm
-                        placeholder:text-slate-400
-                        focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30
-                        dark:border-slate-700 dark:bg-slate-900 dark:placeholder:text-slate-500" />
-          <!-- 一键清空搜索 -->
+                 placeholder="搜索名称、作者、简介或标签…"
+                 class="w-full rounded-xl border border-[#efe4da] bg-white py-2.5 pl-9 pr-9 text-sm
+                        text-[#1f2d2b] placeholder:text-[#8a9694]
+                        focus:border-[#c2410c] focus:outline-none focus:ring-2 focus:ring-[#c2410c]/20
+                        dark:border-[#3a3a40] dark:bg-[#242427] dark:text-[#dadadb]
+                        dark:placeholder:text-[#6b6c6d] dark:focus:border-[#fb923c]" />
           <button id="search-clear" type="button" aria-label="清空搜索"
-                  class="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-full p-1 text-slate-400
-                         transition hover:bg-slate-100 hover:text-slate-600
-                         dark:hover:bg-slate-800 dark:hover:text-slate-200">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                 stroke-linecap="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
+                  class="absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-full p-1 text-[#8a9694]
+                         transition hover:text-[#c2410c] dark:hover:text-[#fb923c]">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <!-- 标签筛选：窄屏用下拉框，宽屏用按钮组 -->
-        <div class="flex items-center gap-2">
-          <!-- 下拉框（手机端） -->
-          <label for="tag-select" class="sr-only">按标签筛选</label>
-          <select id="tag-select"
-                  class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm
-                         focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30
-                         dark:border-slate-700 dark:bg-slate-900 sm:hidden">
-            <option value="">全部标签</option>
-          </select>
+        <!-- 随机逛逛：成本 5 行 JS，情感收益极高（调研中 5 个站点都有类似功能） -->
+        <button id="random-btn" type="button" title="随机逛逛一个博客" aria-label="随机逛逛一个博客"
+                class="shrink-0 rounded-xl border border-[#efe4da] bg-white p-2.5 text-base leading-none transition
+                       hover:border-[#c2410c]/40 hover:bg-[#fff7ed] active:scale-95
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40
+                       dark:border-[#3a3a40] dark:bg-[#242427] dark:hover:border-[#fb923c]/40
+                       dark:hover:bg-[#2e2e33]">🎲</button>
 
-          <!-- 按钮组（平板 / 电脑端），由 JS 渲染 -->
-          <div id="tag-filters" role="group" aria-label="按标签筛选"
-               class="hidden flex-wrap items-center gap-2 sm:flex"></div>
+        <!-- 视图切换：列表（默认）/ 网格 -->
+        <button id="view-toggle" type="button" title="切换列表 / 网格视图" aria-label="切换列表 / 网格视图"
+                class="shrink-0 rounded-xl border border-[#efe4da] bg-white p-2.5 text-[#5c6b69] transition
+                       hover:border-[#c2410c]/40 hover:text-[#c2410c] active:scale-95
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40
+                       dark:border-[#3a3a40] dark:bg-[#242427] dark:text-[#9b9c9d]
+                       dark:hover:border-[#fb923c]/40 dark:hover:text-[#fb923c]">
+          <svg id="icon-view-list" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+          </svg>
+          <svg id="icon-view-grid" class="hidden h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        </button>
+      </div>
 
-          <!-- 重置按钮 -->
-          <button id="reset-btn" type="button"
-                  class="ml-auto hidden shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2
-                         text-xs font-medium text-slate-600 shadow-sm transition
-                         hover:border-indigo-300 hover:text-indigo-600
-                         dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-indigo-400
-                         inline-flex">
-            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
-            </svg>
-            重置
-          </button>
-        </div>
+      <!-- 第二行：标签条（横向可滑，带计数，超出部分折叠进「更多」） -->
+      <div class="mt-2.5 flex items-center gap-1.5">
+        <div id="tag-bar" class="no-scrollbar -mx-1 flex flex-1 items-center gap-1.5 overflow-x-auto px-1 py-0.5"
+             role="group" aria-label="按标签筛选"></div>
+        <button id="more-tags-btn" type="button"
+                class="hidden shrink-0 rounded-full border border-[#efe4da] bg-white px-3 py-1.5 text-xs
+                       font-medium text-[#5c6b69] transition hover:border-[#c2410c]/40 hover:text-[#c2410c]
+                       sm:px-2.5 sm:py-1
+                       dark:border-[#3a3a40] dark:bg-[#242427] dark:text-[#9b9c9d]"></button>
+      </div>
 
+      <!-- 第三行：技术栈筛选。只有 1 种技术栈时没有筛选价值，整行自动隐藏 -->
+      <div id="tech-row" class="mt-2 hidden flex-wrap items-center gap-1.5 sm:flex">
+        <div id="tech-bar" class="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5"
+             role="group" aria-label="按技术栈筛选"></div>
       </div>
     </div>
   </div>
 
-  <!-- ===================== 3. 主体内容 ===================== -->
-  <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+  <!-- ===================== 3. 主体 ===================== -->
+  <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-5 sm:px-6 sm:py-7">
 
-    <!-- 结果计数 -->
-    <p id="result-count" class="mb-4 text-xs text-slate-500 dark:text-slate-400 sm:text-sm" aria-live="polite"></p>
+    <!-- 结果计数 + 排序 + 重置：排序属于「结果的属性」，放在这里也比塞进筛选区更省一行高度 -->
+    <div class="mb-3 flex items-center gap-1.5">
+      <p id="result-count" class="min-w-0 flex-1 text-xs text-[#8a9694] sm:text-sm dark:text-[#6b6c6d]"
+         aria-live="polite"></p>
+      <label for="sort-select" class="sr-only">排序方式</label>
+      <select id="sort-select"
+              class="shrink-0 rounded-lg border border-[#efe4da] bg-white px-2 py-1.5 text-xs text-[#5c6b69]
+                     focus:border-[#c2410c] focus:outline-none focus:ring-2 focus:ring-[#c2410c]/20
+                     dark:border-[#3a3a40] dark:bg-[#242427] dark:text-[#9b9c9d]">
+        <option value="recommend">推荐优先</option>
+        <option value="updated">最近更新</option>
+        <option value="added">最近加入</option>
+        <option value="name">按名称</option>
+      </select>
+      <button id="reset-btn" type="button"
+              class="hidden shrink-0 items-center gap-1 rounded-lg border border-[#efe4da] bg-white px-2.5 py-1.5
+                     text-xs font-medium text-[#5c6b69] transition hover:border-[#c2410c]/40 hover:text-[#c2410c]
+                     dark:border-[#3a3a40] dark:bg-[#242427] dark:text-[#9b9c9d]
+                     dark:hover:border-[#fb923c]/40 dark:hover:text-[#fb923c] inline-flex">
+        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
+        </svg>重置
+      </button>
+    </div>
 
-    <!-- 博客卡片网格：手机 1 列 → 平板 2 列 → 电脑 3 列 -->
-    <section id="blog-grid" aria-label="博客列表"
-             class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3"></section>
+    <!-- 博客列表容器：列表 / 网格两种视图共用同一个容器 -->
+    <section id="blog-list" aria-label="博客列表" class="flex flex-col"></section>
 
-    <!-- 空状态（无搜索结果时显示） -->
-    <div id="empty-state" class="hidden py-16 text-center">
-      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
-        <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+    <!-- 无 JS 时的兜底：目录站如果离开 JS 就一片空白，等于对搜索引擎和分享预览隐身
+         （调研中博友圈、个站商店都是这个毛病）。这段由 tools/build.mjs 自动生成。 -->
+    <noscript>
+      <!-- build:noscript:start -->
+      <!-- 本段由 tools/build.mjs 从 data/blogs.json 自动生成，请勿手工编辑 -->
+      <div class="rounded-xl border border-[#efe4da] bg-white p-4 dark:border-[#333333] dark:bg-[#242427]">
+        <p class="text-sm font-medium text-[#1f2d2b] dark:text-[#dadadb]">
+          你的浏览器未启用 JavaScript，因此搜索与筛选不可用。以下是本站收录的 5 个博客：
+        </p>
+        <ul class="mt-3 space-y-2 text-sm text-[#5c6b69] dark:text-[#9b9c9d]">
+          <li><a href="https://example.com" target="_blank" rel="noopener noreferrer">码农小站</a> <span class="text-[#8a9694]">— 阿柴 · Hexo</span><br><span class="text-[#8a9694]">一个前端工程师的独立博客，记录从零搭建博客的全过程，分享 JavaScript、CSS 与工程化的踩坑笔记。</span></li>
+          <li><a href="https://example.org" target="_blank" rel="noopener noreferrer">深夜书房</a> <span class="text-[#8a9694]">— 林小满 · Typecho</span><br><span class="text-[#8a9694]">读书、电影与生活随笔，每周更新一篇长文，偶尔写点关于写作本身的思考。</span></li>
+          <li><a href="https://example.net" target="_blank" rel="noopener noreferrer">像素与代码</a> <span class="text-[#8a9694]">— Kai · Astro</span><br><span class="text-[#8a9694]">设计与开发的交叉地带：独立开发作品复盘、UI 细节拆解，以及我用来记录灵感的小工具集。</span></li>
+          <li><a href="https://example.edu" target="_blank" rel="noopener noreferrer">山间来信</a> <span class="text-[#8a9694]">— 老周 · Hugo</span><br><span class="text-[#8a9694]">住在山里的第十年，写植物、天气、修屋子和偶尔来访的人。更新很慢，但一直在写。</span></li>
+          <li><a href="https://example.io" target="_blank" rel="noopener noreferrer">字节手记</a> <span class="text-[#8a9694]">— 小陈 · WordPress</span><br><span class="text-[#8a9694]">后端与运维笔记：分布式系统、数据库调优，以及那些踩过的生产事故。</span></li>
+        </ul>
+      </div>
+<!-- build:noscript:end -->
+    </noscript>
+
+    <!-- 空状态 -->
+    <div id="empty-state" class="hidden py-14 text-center">
+      <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f4efea] text-[#8a9694]
+                  dark:bg-[#2e2e33] dark:text-[#6b6c6d]">
+        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
         </svg>
       </div>
-      <p class="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">没有找到匹配的博客</p>
-      <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">换个关键词，或点击「重置」查看全部</p>
+      <p class="mt-3 text-sm font-medium text-[#1f2d2b] dark:text-[#dadadb]">没有找到匹配的博客</p>
+      <p class="mt-1 text-xs text-[#8a9694] dark:text-[#6b6c6d]">换个关键词，或点击「重置」查看全部</p>
       <button id="empty-reset" type="button"
-              class="mt-5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition
-                     hover:bg-indigo-700 active:scale-95">
+              class="mt-4 rounded-xl bg-[#c2410c] px-4 py-2 text-sm font-medium text-white transition
+                     hover:bg-[#9a3412] active:scale-95 dark:bg-[#fb923c] dark:text-[#1d1e20]">
         查看全部博客
       </button>
     </div>
 
-    <!-- ===================== 4. 评论区占位（后续接入 Giscus） ===================== -->
-    <section class="mt-12 border-t border-slate-200 pt-8 dark:border-slate-800">
-      <h2 class="mb-1 text-lg font-bold sm:text-xl">评论区</h2>
-      <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
-        欢迎在这里交流、推荐或自荐博客（基于 GitHub Discussions 的 Giscus 评论系统）
+    <!-- 勤更榜：只靠比对 updated 字段排序即可算出，无需后端，且比浏览量榜诚实 -->
+    <section id="diligent-section" class="mt-9 hidden">
+      <details class="rounded-2xl border border-[#efe4da] bg-white/70 p-4 dark:border-[#333333] dark:bg-[#242427]/60">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-bold
+                        text-[#1f2d2b] dark:text-[#dadadb]">
+          <span>▸</span>
+          勤更榜
+          <span class="text-xs font-normal text-[#8a9694] dark:text-[#6b6c6d]">最近更新最勤快的博客</span>
+        </summary>
+        <ol id="diligent-list" class="mt-3 flex flex-col gap-2"></ol>
+      </details>
+    </section>
+
+    <!-- 异常名录：把失联 / 长期不更的博客隔离出去，主列表永远保持"活的"
+         （做法学自十年之约，这是维护性设计） -->
+    <section id="dormant-section" class="mt-4 hidden">
+      <details class="rounded-2xl border border-[#efe4da] bg-white/70 p-4 dark:border-[#333333] dark:bg-[#242427]/60">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-bold
+                        text-[#5c6b69] dark:text-[#9b9c9d]">
+          <span>▸</span>
+          异常名录
+          <span id="dormant-count" class="text-xs font-normal text-[#8a9694] dark:text-[#6b6c6d]"></span>
+        </summary>
+        <ul id="dormant-list" class="mt-3 flex flex-col gap-2"></ul>
+      </details>
+    </section>
+
+    <!-- ===================== 4. 评论区 ===================== -->
+    <section class="mt-10 border-t border-[#efe4da] pt-7 dark:border-[#333333]">
+      <h2 class="mb-1 text-base font-bold sm:text-lg">评论区</h2>
+      <p class="mb-4 text-xs text-[#8a9694] dark:text-[#6b6c6d]">
+        欢迎交流、推荐或自荐博客（基于 GitHub Discussions 的 Giscus 评论系统）
       </p>
       <!-- Giscus 脚本会把评论框挂载到这个容器里 -->
       <div id="giscus-comments"></div>
@@ -221,117 +343,227 @@
   </main>
 
   <!-- ===================== 页脚 ===================== -->
-  <footer class="border-t border-slate-200 bg-white/60 py-6 dark:border-slate-800 dark:bg-slate-900/40">
-    <div class="mx-auto w-full max-w-6xl px-4 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400 sm:px-6 lg:px-8">
+  <footer class="border-t border-[#efe4da] py-6 dark:border-[#333333]">
+    <div class="mx-auto w-full max-w-3xl px-4 text-center text-xs leading-relaxed text-[#8a9694]
+                sm:px-6 dark:text-[#6b6c6d]">
       <p>博客交流协会 · 独立博客导航</p>
+      <!-- 数据开放声明：对独立博客圈受众有特殊号召力（参考 indieblog.page 的 JSON 导出） -->
+      <p class="mt-1">
+        本站数据以
+        <a href="./data/blogs.json" class="font-medium text-[#c2410c] underline underline-offset-2
+           hover:text-[#9a3412] dark:text-[#fb923c]">data/blogs.json</a>
+        开放，欢迎自取。
+      </p>
       <p class="mt-1">
         想推荐自己的博客？欢迎在下方评论区留言，或到
         <a id="repo-link" href="https://github.com/BlogExchangeAssociation/BlogExchangeAssociation.github.io"
            target="_blank" rel="noopener noreferrer"
-           class="font-medium text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400">GitHub 仓库</a>
+           class="font-medium text-[#c2410c] underline underline-offset-2 hover:text-[#9a3412]
+                  dark:text-[#fb923c]">GitHub 仓库</a>
         提交 Issue。
       </p>
     </div>
   </footer>
 
+  <!-- ===================== 随机逛逛弹层 ===================== -->
+  <div id="random-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+       aria-modal="true" aria-labelledby="random-name">
+    <div id="random-mask" class="modal-mask absolute inset-0"></div>
+    <div class="pop-in relative w-full max-w-sm rounded-2xl border border-[#efe4da] bg-white p-5 shadow-xl
+                dark:border-[#3a3a40] dark:bg-[#242427]">
+      <button id="random-close" type="button" aria-label="关闭"
+              class="absolute right-3 top-3 rounded-full p-1 text-[#8a9694] transition hover:text-[#c2410c]
+                     dark:hover:text-[#fb923c]">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+      <p class="text-xs font-medium text-[#8a9694] dark:text-[#6b6c6d]">🎲 随机逛逛</p>
+      <h3 id="random-name" class="mt-2 text-lg font-bold text-[#1f2d2b] dark:text-[#dadadb]"></h3>
+      <p id="random-meta" class="mt-1 text-xs text-[#8a9694] dark:text-[#6b6c6d]"></p>
+      <p id="random-desc" class="mt-3 text-sm leading-relaxed text-[#5c6b69] dark:text-[#9b9c9d]"></p>
+      <p id="random-message" class="mt-3 hidden rounded-xl bg-[#fff7ed] p-3 text-xs leading-relaxed
+                                    text-[#9a3412] dark:bg-[#2e2e33] dark:text-[#fdba74]"></p>
+      <div class="mt-5 flex gap-2">
+        <a id="random-go" href="#" target="_blank" rel="noopener noreferrer"
+           class="flex-1 rounded-xl bg-[#c2410c] px-4 py-2.5 text-center text-sm font-medium text-white
+                  transition hover:bg-[#9a3412] active:scale-95 dark:bg-[#fb923c] dark:text-[#1d1e20]">
+          去逛逛
+        </a>
+        <button id="random-again" type="button"
+                class="rounded-xl border border-[#efe4da] px-4 py-2.5 text-sm font-medium text-[#5c6b69]
+                       transition hover:border-[#c2410c]/40 hover:text-[#c2410c]
+                       dark:border-[#3a3a40] dark:text-[#9b9c9d]">再来一个</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== 页面逻辑 ===================== -->
+  <!-- build:script:start -->
   <script>
   (function () {
     'use strict';
 
-    /* ---------------------------------------------------------------
-     * 0. 配置与全局状态
-     * ------------------------------------------------------------- */
-    var DATA_URL = './data/blogs.json';   // 数据源：相对路径，兼容 GitHub Pages 子路径
-    var ALL_TAGS = '全部';                 // 「全部标签」的显示文案
+    /* ===============================================================
+     * 0. 配置与状态
+     * ============================================================= */
+    var DATA_URL = './data/blogs.json';
+    var LS = { theme: 'bex-theme', view: 'bex-view' };
+    var DILIGENT_TOP = 10;   // 勤更榜取前几名
+    var TAG_COLLAPSE = 10;   // 标签条默认显示几个，其余折叠进「更多」
 
     var state = {
-      blogs: [],        // 全部博客数据
-      keyword: '',      // 当前搜索关键词（已去除首尾空格，未转小写）
-      activeTag: '',    // 当前选中的标签（'' 表示全部）
-      loading: true,    // 是否正在加载数据
-      error: ''         // 加载错误信息
+      blogs: [],
+      keyword: '',
+      tag: '',
+      tech: '',
+      sort: 'recommend',
+      view: 'list',
+      loading: true,
+      error: ''
     };
 
-    // 常用 DOM 引用
-    var el = {
-      grid:        document.getElementById('blog-grid'),
-      empty:       document.getElementById('empty-state'),
-      count:       document.getElementById('result-count'),
-      stats:       document.getElementById('site-stats'),
-      search:      document.getElementById('search-input'),
-      searchClear: document.getElementById('search-clear'),
-      tagSelect:   document.getElementById('tag-select'),
-      tagFilters:  document.getElementById('tag-filters'),
-      reset:       document.getElementById('reset-btn'),
-      emptyReset:  document.getElementById('empty-reset'),
-      themeToggle: document.getElementById('theme-toggle'),
-      iconSun:     document.getElementById('icon-sun'),
-      iconMoon:    document.getElementById('icon-moon'),
-      comments:    document.getElementById('giscus-comments')
-    };
+    // 批量取 DOM：把 id 的 kebab-case 转成 camelCase 作为 key
+    var el = {};
+    ['blog-list', 'empty-state', 'result-count', 'site-stats', 'search-input', 'search-clear',
+      'tag-bar', 'more-tags-btn', 'tech-bar', 'tech-row', 'sort-select', 'reset-btn', 'empty-reset',
+      'view-toggle', 'icon-view-list', 'icon-view-grid', 'random-btn', 'random-modal', 'random-mask',
+      'random-close', 'random-again', 'random-go', 'random-name', 'random-meta', 'random-desc',
+      'random-message', 'theme-toggle', 'icon-system', 'icon-sun', 'icon-moon',
+      'diligent-section', 'diligent-list', 'dormant-section', 'dormant-list', 'dormant-count',
+      'giscus-comments'
+    ].forEach(function (id) {
+      el[id.replace(/-([a-z])/g, function (m, c) { return c.toUpperCase(); })] = document.getElementById(id);
+    });
 
-    /* ---------------------------------------------------------------
+    /* ===============================================================
      * 1. 工具函数
-     * ------------------------------------------------------------- */
+     * ============================================================= */
 
-    /** HTML 转义：所有来自 JSON 的文本都必须经过它，防止 XSS 或标签破坏布局 */
-    function escapeHtml(value) {
-      return String(value == null ? '' : value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    /** HTML 转义：所有来自 JSON 的文本都要过一遍，防止 XSS 或标签破坏布局 */
+    function esc(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    /** 防抖：避免输入每个字符都立刻重绘 */
     function debounce(fn, delay) {
-      var timer = null;
+      var t = null;
       return function () {
         var args = arguments, ctx = this;
-        clearTimeout(timer);
-        timer = setTimeout(function () { fn.apply(ctx, args); }, delay);
+        clearTimeout(t);
+        t = setTimeout(function () { fn.apply(ctx, args); }, delay);
       };
     }
 
-    /** 只保留 http/https 链接，避免 javascript: 之类的伪协议 */
-    function safeUrl(url) {
-      var u = String(url || '').trim();
+    /** 只接受 http/https，挡掉 javascript: 之类的伪协议 */
+    function safeUrl(u) {
+      u = String(u || '').trim();
       return /^https?:\/\//i.test(u) ? u : '';
     }
 
-    /** 根据 URL 取域名，用于卡片上展示（取不到就返回空） */
-    function hostOf(url) {
-      try { return new URL(url).hostname.replace(/^www\./, ''); }
-      catch (e) { return ''; }
+    function hostOf(u) {
+      try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
     }
 
-    /* ---------------------------------------------------------------
-     * 2. 数据加载（fetch ./data/blogs.json）
-     * ------------------------------------------------------------- */
+    /** 把各种日期写法解析成时间戳；解析不出来返回 null */
+    function parseDate(v) {
+      if (!v) return null;
+      var t = Date.parse(v);
+      return isNaN(t) ? null : t;
+    }
 
-    /** 校验并规整单条数据，过滤掉缺少必要字段的脏数据 */
+    /** 距今天数；非法日期返回 null，未来日期按 0 处理 */
+    function daysAgo(v) {
+      var t = parseDate(v);
+      if (t === null) return null;
+      var d = Math.floor((Date.now() - t) / 86400000);
+      return d < 0 ? 0 : d;
+    }
+
+    /** 相对时间文案 */
+    function relativeTime(v) {
+      var d = daysAgo(v);
+      if (d === null) return '';
+      if (d === 0) return '今天更新';
+      if (d === 1) return '昨天更新';
+      if (d < 30) return d + ' 天前更新';
+      if (d < 365) return Math.floor(d / 30) + ' 个月前更新';
+      return Math.floor(d / 365) + ' 年前更新';
+    }
+
+    /** 新鲜度档位：圆点颜色用。阈值 30 / 180 天 */
+    function freshness(b) {
+      if (b.status !== 'active') return 'dormant';
+      var d = daysAgo(b.updated);
+      if (d === null) return 'unknown';
+      if (d <= 30) return 'fresh';
+      if (d <= 180) return 'stale';
+      return 'old';
+    }
+
+    /** 名称首字色块：避免热链第三方 favicon（隐私 / 混合内容 / 失败率三重风险） */
+    function initialColor(name) {
+      var palette = ['#c2410c', '#0f766e', '#7c3aed', '#b45309', '#0369a1', '#9d174d', '#15803d'];
+      var h = 0;
+      for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 997;
+      return palette[h % palette.length];
+    }
+
+    function initialAvatar(b) {
+      if (b.avatar) {
+        return '<img src="' + esc(b.avatar) + '" alt="" loading="lazy" decoding="async" ' +
+               'class="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-[#efe4da] dark:ring-[#3a3a40]">';
+      }
+      var ch = b.name.trim().charAt(0) || '博';
+      return '<span aria-hidden="true" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full ' +
+             'text-sm font-bold text-white" style="background:' + initialColor(b.name) + '">' +
+             esc(ch) + '</span>';
+    }
+
+    function freshnessBadge(b) {
+      var f = freshness(b);
+      var dot = {
+        fresh: 'bg-[#15803d]', stale: 'bg-[#b45309]', old: 'bg-[#a8a29e]',
+        unknown: 'bg-[#d6d3d1] dark:bg-[#4a4a50]', dormant: 'bg-[#a8a29e]'
+      }[f];
+      var label = b.status === 'dormant' ? '长期未更新' : relativeTime(b.updated);
+      if (!label) label = '更新日期未知';
+      return '<span class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-[#8a9694] ' +
+             'dark:text-[#6b6c6d]"><span class="h-2 w-2 shrink-0 rounded-full ' + dot + '"></span>' +
+             esc(label) + '</span>';
+    }
+
+    /* ===============================================================
+     * 2. 数据加载
+     * ============================================================= */
+
+    /** 校验并规整单条数据；缺 name / url 的直接丢弃 */
     function normalize(raw) {
       if (!raw || typeof raw !== 'object') return null;
       var url = safeUrl(raw.url);
       var name = String(raw.name || '').trim();
-      if (!name || !url) return null;              // 名称和链接是必填项
+      if (!name || !url) return null;
 
       var tags = Array.isArray(raw.tags)
-        ? raw.tags.map(function (t) { return String(t).trim(); }).filter(Boolean)
-        : [];
+        ? raw.tags.map(function (t) { return String(t).trim(); }).filter(Boolean) : [];
 
       return {
         name: name,
         url: url,
         author: String(raw.author || '').trim() || '匿名',
         description: String(raw.description || '').trim(),
-        tags: tags
+        tags: tags,
+        tech: String(raw.tech || '').trim(),
+        feed: safeUrl(raw.feed),
+        message: String(raw.message || '').trim(),
+        added: String(raw.added || '').trim(),
+        updated: String(raw.updated || '').trim(),
+        avatar: safeUrl(raw.avatar),
+        featured: raw.featured === true,
+        status: raw.status === 'dormant' ? 'dormant' : 'active'
       };
     }
 
-    /** 拉取数据文件 */
     function loadBlogs() {
       return fetch(DATA_URL, { cache: 'no-cache' })
         .then(function (res) {
@@ -339,292 +571,512 @@
           return res.json();
         })
         .then(function (data) {
-          // 兼容「直接是数组」和「{ blogs: [...] }」两种写法
-          var list = Array.isArray(data) ? data : (data && Array.isArray(data.blogs) ? data.blogs : []);
-          if (!Array.isArray(list)) throw new Error('数据格式不是数组');
-
+          var list = Array.isArray(data) ? data
+            : (data && Array.isArray(data.blogs) ? data.blogs : []);
           state.blogs = list.map(normalize).filter(Boolean);
         });
     }
 
-    /* ---------------------------------------------------------------
-     * 3. 筛选与渲染
-     * ------------------------------------------------------------- */
+    /* ===============================================================
+     * 3. 筛选与排序
+     * ============================================================= */
 
-    /** 判断一条博客是否符合当前「关键词 + 标签」条件 */
-    function match(blog, keyword, tag) {
-      // ① 标签筛选
-      if (tag && blog.tags.indexOf(tag) === -1) return false;
-      // ② 关键词筛选：名称 / 作者 / 简介 / 标签，任一命中即可
-      if (!keyword) return true;
-      var kw = keyword.toLowerCase();
-      return [blog.name, blog.author, blog.description, blog.tags.join(' ')]
-        .join(' ')
-        .toLowerCase()
-        .indexOf(kw) !== -1;
+    function matches(b) {
+      if (b.status !== 'active') return false;                 // 异常名录不进主列表
+      if (state.tag && b.tags.indexOf(state.tag) === -1) return false;
+      if (state.tech && b.tech !== state.tech) return false;
+      if (!state.keyword) return true;
+      var kw = state.keyword.toLowerCase();
+      return [b.name, b.author, b.description, b.tech, b.tags.join(' ')]
+        .join(' ').toLowerCase().indexOf(kw) !== -1;
     }
 
-    /** 生成单张卡片的 HTML */
-    function cardHtml(blog, index) {
-      var host = hostOf(blog.url);
+    function sorted(list) {
+      var arr = list.slice();
+      if (state.sort === 'updated') {
+        arr.sort(function (a, b) { return (parseDate(b.updated) || 0) - (parseDate(a.updated) || 0); });
+      } else if (state.sort === 'added') {
+        arr.sort(function (a, b) { return (parseDate(b.added) || 0) - (parseDate(a.added) || 0); });
+      } else if (state.sort === 'name') {
+        arr.sort(function (a, b) { return a.name.localeCompare(b.name, 'zh-Hans-CN'); });
+      } else {
+        // 推荐优先：featured 置顶，其后按最近更新，再按加入时间
+        arr.sort(function (a, b) {
+          if (a.featured !== b.featured) return a.featured ? -1 : 1;
+          var d = (parseDate(b.updated) || 0) - (parseDate(a.updated) || 0);
+          if (d) return d;
+          return (parseDate(b.added) || 0) - (parseDate(a.added) || 0);
+        });
+      }
+      return arr;
+    }
 
-      var tagPills = blog.tags.map(function (tag) {
-        return '<button type="button" data-tag="' + escapeHtml(tag) + '" ' +
-               'class="tag-pill rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 ' +
-               'transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">' +
-               escapeHtml(tag) + '</button>';
+    /* ===============================================================
+     * 4. 渲染：列表条目 / 网格卡片
+     * ============================================================= */
+
+    /* 桌面端：卡片上的标签可以直接点来筛选。
+       移动端：标签不可点（触屏上 24px 高的小胶囊不适合做点击目标，容易误触），
+       筛选统一走顶部的标签条 —— 这也是所有同类站点的做法。 */
+    var mqDesktop = window.matchMedia('(min-width: 640px)');
+
+    function tagPillsHtml(tags) {
+      var clickable = mqDesktop.matches;
+      var cls = 'rounded-md bg-[#f4efea] px-1.5 py-0.5 text-[11px] text-[#5c6b69] ' +
+                'dark:bg-[#2e2e33] dark:text-[#9b9c9d]';
+      return tags.map(function (t) {
+        return clickable
+          ? '<button type="button" data-tag="' + esc(t) + '" class="' + cls + ' transition ' +
+            'hover:bg-[#efe4da] hover:text-[#c2410c] dark:hover:bg-[#3a3a40] dark:hover:text-[#fb923c]">' +
+            esc(t) + '</button>'
+          : '<span class="' + cls + '">' + esc(t) + '</span>';
       }).join('');
-
-      return '' +
-        '<article class="fade-up group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ' +
-                 'transition duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-lg ' +
-                 'dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500/50"' +
-                 ' style="animation-delay:' + Math.min(index * 40, 400) + 'ms">' +
-
-          // 标题行：名称（新窗口打开）
-          '<div class="flex items-start justify-between gap-3">' +
-            '<h3 class="min-w-0 text-base font-bold leading-snug sm:text-lg">' +
-              '<a href="' + escapeHtml(blog.url) + '" target="_blank" rel="noopener noreferrer" ' +
-                 'class="text-slate-900 transition hover:text-indigo-600 focus:outline-none focus-visible:ring-2 ' +
-                 'focus-visible:ring-indigo-500/40 dark:text-white dark:hover:text-indigo-400">' +
-                escapeHtml(blog.name) +
-              '</a>' +
-            '</h3>' +
-            // 外链图标，强化「点击跳转」的暗示
-            '<svg class="mt-1 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-indigo-500 ' +
-                 'dark:text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-                 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-              '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />' +
-              '<path d="M15 3h6v6" /><path d="M10 14 21 3" />' +
-            '</svg>' +
-          '</div>' +
-
-          // 域名 + 作者
-          '<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400 dark:text-slate-500">' +
-            (host ? '<span class="inline-flex items-center gap-1">' +
-              '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-                   'stroke-linecap="round" aria-hidden="true">' +
-                '<circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />' +
-              '</svg>' + escapeHtml(host) + '</span>' : '') +
-            '<span class="inline-flex items-center gap-1">' +
-              '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-                   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                '<path d="M20 21a8 8 0 1 0-16 0" /><circle cx="12" cy="8" r="4" />' +
-              '</svg>' + escapeHtml(blog.author) +
-            '</span>' +
-          '</p>' +
-
-          // 简介：占满剩余高度，保证不同卡片底部对齐
-          '<p class="mt-3 line-clamp-3 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">' +
-            (blog.description ? escapeHtml(blog.description) : '<span class="text-slate-400 dark:text-slate-600">这个博客还没有写简介</span>') +
-          '</p>' +
-
-          // 标签
-          (tagPills
-            ? '<div class="mt-4 flex flex-wrap gap-1.5">' + tagPills + '</div>'
-            : '') +
-        '</article>';
     }
 
-    /** 渲染标签筛选控件（按钮组 + 下拉框），只生成一次 */
-    function renderTagControls() {
-      // 统计每个标签出现的次数，按「次数多的在前，其次按拼音」排序
+    function metaLineHtml(b) {
+      var parts = ['<span>' + esc(b.author) + '</span>'];
+      var host = hostOf(b.url);
+      if (host) parts.push('<span aria-hidden="true">·</span><span>' + esc(host) + '</span>');
+      if (b.tech) {
+        parts.push('<span aria-hidden="true">·</span>' +
+          '<button type="button" data-tech="' + esc(b.tech) + '" class="tech-pill transition ' +
+          'hover:text-[#c2410c] dark:hover:text-[#fb923c]">' + esc(b.tech) + '</button>');
+      }
+      return parts.join(' ');
+    }
+
+    /** 列表视图条目：内容优先于容器，靠 1px 分隔线而非卡片边框（学 ooh.directory / blogroll.org） */
+    function listItemHtml(b, i) {
+      return '' +
+      '<article class="fade-up border-b border-[#efe4da] dark:border-[#333333]" ' +
+               'style="animation-delay:' + Math.min(i * 25, 300) + 'ms">' +
+        '<div class="flex items-start gap-3 py-3.5">' +
+          initialAvatar(b) +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">' +
+              '<h3 class="min-w-0 text-[17px] font-bold leading-snug sm:text-[19px]">' +
+                '<a href="' + esc(b.url) + '" target="_blank" rel="noopener noreferrer" ' +
+                   'class="text-[#1f2d2b] transition hover:text-[#c2410c] focus:outline-none ' +
+                   'focus-visible:ring-2 focus-visible:ring-[#c2410c]/40 dark:text-[#dadadb] ' +
+                   'dark:hover:text-[#fb923c]">' + esc(b.name) + '</a>' +
+              '</h3>' +
+              (b.featured ? '<span class="rounded bg-[#c2410c]/10 px-1.5 py-0.5 text-[10px] font-medium ' +
+                'text-[#c2410c] dark:bg-[#fb923c]/15 dark:text-[#fb923c]">推荐</span>' : '') +
+              freshnessBadge(b) +
+            '</div>' +
+            (b.description
+              ? '<p class="clamp-2 mt-1 text-sm leading-relaxed text-[#5c6b69] dark:text-[#9b9c9d]">' +
+                esc(b.description) + '</p>'
+              : '<p class="mt-1 text-sm text-[#a8a29e] dark:text-[#6b6c6d]">这个博客还没有写简介</p>') +
+            '<div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#8a9694] ' +
+                 'dark:text-[#6b6c6d]">' + metaLineHtml(b) + '</div>' +
+            (b.tags.length ? '<div class="mt-2 flex flex-wrap gap-1">' + tagPillsHtml(b.tags) + '</div>' : '') +
+          '</div>' +
+        '</div>' +
+      '</article>';
+    }
+
+    /** 网格视图卡片：双层虚线错位 + 箭头飞入，纯 CSS 反馈 */
+    function cardHtml(b, i) {
+      return '' +
+      '<article class="fade-up card-lift flex h-full flex-col rounded-2xl border border-[#efe4da] ' +
+               'bg-white p-4 transition dark:border-[#333333] dark:bg-[#242427]" ' +
+               'style="animation-delay:' + Math.min(i * 25, 300) + 'ms">' +
+        '<div class="flex items-start gap-3">' +
+          initialAvatar(b) +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="flex items-start gap-1.5">' +
+              '<h3 class="min-w-0 flex-1 text-base font-bold leading-snug">' +
+                '<a href="' + esc(b.url) + '" target="_blank" rel="noopener noreferrer" ' +
+                   'class="text-[#1f2d2b] transition hover:text-[#c2410c] focus:outline-none ' +
+                   'focus-visible:ring-2 focus-visible:ring-[#c2410c]/40 dark:text-[#dadadb] ' +
+                   'dark:hover:text-[#fb923c]">' + esc(b.name) + '</a>' +
+              '</h3>' +
+              '<svg class="card-arrow mt-1 h-3.5 w-3.5 shrink-0 text-[#c2410c] dark:text-[#fb923c]" ' +
+                   'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+                   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M7 17 17 7M9 7h8v8" /></svg>' +
+            '</div>' +
+            '<div class="mt-1">' + freshnessBadge(b) + '</div>' +
+          '</div>' +
+        '</div>' +
+        (b.description
+          ? '<p class="clamp-3 mt-3 flex-1 text-sm leading-relaxed text-[#5c6b69] dark:text-[#9b9c9d]">' +
+            esc(b.description) + '</p>'
+          : '<p class="mt-3 flex-1 text-sm text-[#a8a29e] dark:text-[#6b6c6d]">这个博客还没有写简介</p>') +
+        '<div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#8a9694] ' +
+             'dark:text-[#6b6c6d]">' + metaLineHtml(b) + '</div>' +
+        (b.tags.length ? '<div class="mt-2 flex flex-wrap gap-1">' + tagPillsHtml(b.tags) + '</div>' : '') +
+      '</article>';
+    }
+
+    /* ===============================================================
+     * 5. 渲染：筛选控件
+     * ============================================================= */
+
+    var expandedTags = false;
+
+    function chipHtml(kind, value, label, count, active) {
+      // 手机端给足纵向 padding，让触控高度 ≥ 32px（横向宽度本就够）
+      var base = 'shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition ' +
+                 'sm:px-2.5 sm:py-1 ';
+      var on = 'border-[#c2410c] bg-[#c2410c] text-white dark:border-[#fb923c] dark:bg-[#fb923c] dark:text-[#1d1e20]';
+      var off = 'border-[#efe4da] bg-white text-[#5c6b69] hover:border-[#c2410c]/40 hover:text-[#c2410c] ' +
+                'dark:border-[#3a3a40] dark:bg-[#242427] dark:text-[#9b9c9d] dark:hover:border-[#fb923c]/40 ' +
+                'dark:hover:text-[#fb923c]';
+      return '<button type="button" data-' + kind + '="' + esc(value) + '" aria-pressed="' +
+             (active ? 'true' : 'false') + '" class="' + base + (active ? on : off) + '">' +
+             esc(label) + ' <span class="opacity-60">' + count + '</span></button>';
+    }
+
+    function activeBlogs() {
+      return state.blogs.filter(function (b) { return b.status === 'active'; });
+    }
+
+    /** 标签条：带计数、超出折叠（HeyBlog 一次铺开 200+ 标签是反面教材） */
+    function renderTagBar() {
       var freq = {};
-      state.blogs.forEach(function (b) {
+      activeBlogs().forEach(function (b) {
         b.tags.forEach(function (t) { freq[t] = (freq[t] || 0) + 1; });
       });
       var tags = Object.keys(freq).sort(function (a, b) {
         return freq[b] - freq[a] || a.localeCompare(b, 'zh-Hans-CN');
       });
 
-      // 下拉框（手机端）
-      el.tagSelect.innerHTML = '<option value="">' + ALL_TAGS + '标签（' + state.blogs.length + '）</option>' +
-        tags.map(function (t) {
-          return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '（' + freq[t] + '）</option>';
-        }).join('');
+      var shown = expandedTags ? tags : tags.slice(0, TAG_COLLAPSE);
+      var html = chipHtml('tag', '', '全部', activeBlogs().length, state.tag === '');
+      shown.forEach(function (t) { html += chipHtml('tag', t, t, freq[t], state.tag === t); });
+      el.tagBar.innerHTML = html;
 
-      // 按钮组（宽屏）：全部 + 各标签
-      var buttons = [tagButtonHtml('', ALL_TAGS + ' ' + state.blogs.length)];
-      tags.forEach(function (t) {
-        buttons.push(tagButtonHtml(t, escapeHtml(t) + ' ' + freq[t]));
+      var hidden = tags.length - shown.length;
+      el.moreTagsBtn.classList.toggle('hidden', hidden <= 0 && !expandedTags);
+      el.moreTagsBtn.textContent = expandedTags ? '收起 ▴' : '更多 +' + hidden + ' ▾';
+    }
+
+    /** 技术栈筛选条：调研的 14 个同类站里只有 1 个做了这个维度，最有辨识度的切面。
+     *  只有 1 种技术栈时没有筛选价值，整行隐藏，避免白占手机屏幕高度。 */
+    function renderTechBar() {
+      var freq = {};
+      activeBlogs().forEach(function (b) {
+        if (!b.tech) return;
+        freq[b.tech] = (freq[b.tech] || 0) + 1;
       });
-      el.tagFilters.innerHTML = buttons.join('');
-    }
-
-    /** 标签按钮模板 */
-    function tagButtonHtml(tag, label) {
-      return '<button type="button" data-tag="' + escapeHtml(tag) + '" ' +
-             'class="tag-filter whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition sm:text-sm">' +
-             label + '</button>';
-    }
-
-    /** 同步标签控件的选中样式 */
-    function syncTagControls() {
-      var active = state.activeTag;
-
-      Array.prototype.forEach.call(el.tagFilters.querySelectorAll('.tag-filter'), function (btn) {
-        var on = btn.getAttribute('data-tag') === active;
-        btn.className = 'tag-filter whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition sm:text-sm ' +
-          (on
-            ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
-            : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 ' +
-              'dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-indigo-500/60 dark:hover:text-indigo-400');
-        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var techs = Object.keys(freq).sort(function (a, b) {
+        return freq[b] - freq[a] || a.localeCompare(b, 'zh-Hans-CN');
       });
+      if (techs.length < 2) {
+        el.techBar.innerHTML = '';
+        el.techRow.classList.add('hidden');
+        return;
+      }
+      // 注意：不要用 classList.add('flex')，那会覆盖掉 sm:flex 的断点语义
+      el.techRow.classList.remove('hidden');
 
-      el.tagSelect.value = active;
+      var withTech = activeBlogs().filter(function (b) { return b.tech; }).length;
+      var html = chipHtml('tech', '', '全部技术栈', withTech, state.tech === '');
+      techs.forEach(function (t) { html += chipHtml('tech', t, t, freq[t], state.tech === t); });
+      el.techBar.innerHTML = html;
     }
 
-    /** 渲染骨架屏（加载中占位） */
+    /* ===============================================================
+     * 6. 渲染：勤更榜 / 异常名录 / 统计
+     * ============================================================= */
+
+    function renderDiligent() {
+      var ranked = activeBlogs()
+        .filter(function (b) { return daysAgo(b.updated) !== null; })
+        .sort(function (a, b) { return daysAgo(a.updated) - daysAgo(b.updated); })
+        .slice(0, DILIGENT_TOP);
+
+      if (ranked.length < 3) { el.diligentSection.classList.add('hidden'); return; }
+      el.diligentSection.classList.remove('hidden');
+
+      el.diligentList.innerHTML = ranked.map(function (b, i) {
+        var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+        return '<li class="flex items-baseline gap-2 text-sm">' +
+          '<span class="w-6 shrink-0 text-center text-xs">' + medal + '</span>' +
+          '<a href="' + esc(b.url) + '" target="_blank" rel="noopener noreferrer" ' +
+             'class="min-w-0 flex-1 truncate font-medium text-[#1f2d2b] transition hover:text-[#c2410c] ' +
+             'dark:text-[#dadadb] dark:hover:text-[#fb923c]">' + esc(b.name) + '</a>' +
+          '<span class="shrink-0 text-xs text-[#8a9694] dark:text-[#6b6c6d]">' +
+            esc(relativeTime(b.updated).replace(/更新$/, '') || '—') + '</span>' +
+        '</li>';
+      }).join('');
+    }
+
+    function renderDormant() {
+      var list = state.blogs.filter(function (b) { return b.status !== 'active'; });
+      if (!list.length) { el.dormantSection.classList.add('hidden'); return; }
+
+      el.dormantSection.classList.remove('hidden');
+      el.dormantCount.textContent = '（' + list.length + ' 个）';
+      el.dormantList.innerHTML = list.map(function (b) {
+        return '<li class="flex flex-wrap items-baseline gap-x-2 text-sm">' +
+          '<a href="' + esc(b.url) + '" target="_blank" rel="noopener noreferrer" ' +
+             'class="font-medium text-[#5c6b69] underline underline-offset-2 hover:text-[#c2410c] ' +
+             'dark:text-[#9b9c9d] dark:hover:text-[#fb923c]">' + esc(b.name) + '</a>' +
+          '<span class="text-xs text-[#8a9694] dark:text-[#6b6c6d]">' + esc(b.author) + '</span>' +
+          (b.updated ? '<span class="text-xs text-[#8a9694] dark:text-[#6b6c6d]">最后更新 ' +
+            esc(b.updated) + '</span>' : '') +
+        '</li>';
+      }).join('');
+    }
+
+    /** Hero 的规模与活跃度声明 —— 目录站最重要的可信度锚点 */
+    function renderStats() {
+      var act = activeBlogs();
+      var freshCount = act.filter(function (b) {
+        var d = daysAgo(b.updated);
+        return d !== null && d <= 30;
+      }).length;
+      var latest = act
+        .map(function (b) { return parseDate(b.updated); })
+        .filter(function (t) { return t !== null; })
+        .sort(function (a, b) { return b - a; })[0];
+
+      var bits = ['已收录 ' + act.length + ' 个博客'];
+      if (freshCount) bits.push('其中 ' + freshCount + ' 个近 30 天有更新');
+      if (latest) {
+        var d = Math.floor((Date.now() - latest) / 86400000);
+        bits.push('最近更新 ' + (d <= 0 ? '就在今天' : d + ' 天前'));
+      }
+      var dormant = state.blogs.length - act.length;
+      if (dormant) bits.push('失联 ' + dormant + ' 个');
+      el.siteStats.textContent = bits.join(' · ');
+    }
+
+    /* ===============================================================
+     * 7. 主渲染
+     * ============================================================= */
+
     function renderSkeleton(n) {
-      var card = '' +
-        '<div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">' +
-          '<div class="skeleton h-5 w-2/3 rounded bg-slate-200 dark:bg-slate-800"></div>' +
-          '<div class="skeleton mt-3 h-3 w-1/3 rounded bg-slate-200 dark:bg-slate-800"></div>' +
-          '<div class="skeleton mt-4 h-3 w-full rounded bg-slate-200 dark:bg-slate-800"></div>' +
-          '<div class="skeleton mt-2 h-3 w-5/6 rounded bg-slate-200 dark:bg-slate-800"></div>' +
-          '<div class="mt-5 flex gap-2">' +
-            '<div class="skeleton h-6 w-14 rounded-full bg-slate-200 dark:bg-slate-800"></div>' +
-            '<div class="skeleton h-6 w-16 rounded-full bg-slate-200 dark:bg-slate-800"></div>' +
-          '</div>' +
-        '</div>';
-      el.grid.innerHTML = new Array(n + 1).join(card);
+      var row = '<div class="flex items-start gap-3 border-b border-[#efe4da] py-3.5 dark:border-[#333333]">' +
+        '<div class="skeleton h-9 w-9 shrink-0 rounded-full bg-[#f4efea] dark:bg-[#2e2e33]"></div>' +
+        '<div class="min-w-0 flex-1">' +
+          '<div class="skeleton h-4 w-1/3 rounded bg-[#f4efea] dark:bg-[#2e2e33]"></div>' +
+          '<div class="skeleton mt-2.5 h-3 w-full rounded bg-[#f4efea] dark:bg-[#2e2e33]"></div>' +
+          '<div class="skeleton mt-2 h-3 w-4/5 rounded bg-[#f4efea] dark:bg-[#2e2e33]"></div>' +
+        '</div></div>';
+      el.blogList.className = 'flex flex-col';
+      el.blogList.innerHTML = new Array(n + 1).join(row);
     }
 
-    /** 主渲染函数 */
     function render() {
-      // ① 加载中 / 出错：显示占位或错误提示
       if (state.loading) {
-        el.count.textContent = '正在加载博客列表…';
-        el.empty.classList.add('hidden');
+        el.resultCount.textContent = '正在加载博客列表…';
+        el.emptyState.classList.add('hidden');
         renderSkeleton(6);
         return;
       }
+
       if (state.error) {
-        el.grid.innerHTML = '';
-        el.count.textContent = '';
-        el.empty.classList.remove('hidden');
-        el.empty.querySelector('p').textContent = '博客数据加载失败';
-        el.empty.querySelectorAll('p')[1].textContent = state.error + '（请确认 data/blogs.json 是否存在，且通过 http 服务访问而非直接双击打开文件）';
+        el.blogList.innerHTML = '';
+        el.resultCount.textContent = '';
+        el.emptyState.classList.remove('hidden');
+        var ps = el.emptyState.querySelectorAll('p');
+        ps[0].textContent = '博客数据加载失败';
+        ps[1].textContent = state.error +
+          '（请确认 data/blogs.json 存在，且通过 http 服务访问，而不是直接双击打开文件）';
         el.emptyReset.classList.add('hidden');
         return;
       }
 
-      // ② 正常渲染
-      var list = state.blogs.filter(function (b) { return match(b, state.keyword, state.activeTag); });
+      var list = sorted(state.blogs.filter(matches));
+      var isFiltering = !!(state.keyword || state.tag || state.tech);
 
-      el.grid.innerHTML = list.map(cardHtml).join('');
+      // 视图切换：列表单列 / 网格自适应多列
+      el.blogList.className = state.view === 'grid'
+        ? 'grid grid-cols-1 gap-3 sm:grid-cols-2'
+        : 'flex flex-col';
+      el.blogList.innerHTML = state.view === 'grid'
+        ? list.map(cardHtml).join('')
+        : list.map(listItemHtml).join('');
+
       el.emptyReset.classList.remove('hidden');
-      el.empty.classList.toggle('hidden', list.length > 0);
+      el.emptyState.classList.toggle('hidden', list.length > 0);
 
-      // 结果计数
-      var isFiltering = state.keyword || state.activeTag;
-      el.count.textContent = isFiltering
-        ? '共 ' + list.length + ' 个结果（总计 ' + state.blogs.length + ' 个博客）'
-        : '共收录 ' + state.blogs.length + ' 个博客';
+      el.resultCount.textContent = isFiltering
+        ? '共 ' + list.length + ' 个结果（总计 ' + activeBlogs().length + ' 个博客）'
+        : '';
+      el.resultCount.classList.toggle('hidden', !isFiltering);
 
-      // 有筛选条件时显示「重置」按钮
-      el.reset.classList.toggle('hidden', !isFiltering);
+      el.resetBtn.classList.toggle('hidden', !isFiltering);
 
-      // 空状态文案（首次加载无数据 vs 筛选无结果）
       if (!list.length) {
-        var ps = el.empty.querySelectorAll('p');
-        ps[0].textContent = isFiltering ? '没有找到匹配的博客' : '还没有收录任何博客';
-        ps[1].textContent = isFiltering ? '换个关键词，或点击「重置」查看全部' : '欢迎到评论区推荐你的博客';
+        var eps = el.emptyState.querySelectorAll('p');
+        eps[0].textContent = isFiltering ? '没有找到匹配的博客' : '还没有收录任何博客';
+        eps[1].textContent = isFiltering ? '换个关键词，或点击「重置」查看全部' : '欢迎到评论区推荐你的博客';
       }
     }
 
-    /* ---------------------------------------------------------------
-     * 4. 事件绑定
-     * ------------------------------------------------------------- */
+    /* ===============================================================
+     * 8. 交互
+     * ============================================================= */
 
-    /** 应用筛选条件（统一入口） */
-    function applyFilters(keyword, tag) {
-      if (typeof keyword === 'string') state.keyword = keyword.trim();
-      if (typeof tag === 'string') state.activeTag = tag;
+    function apply(patch) {
+      patch = patch || {};
+      if (typeof patch.keyword === 'string') state.keyword = patch.keyword.trim();
+      if (typeof patch.tag === 'string') state.tag = patch.tag;
+      if (typeof patch.tech === 'string') state.tech = patch.tech;
+
       el.searchClear.classList.toggle('hidden', !state.keyword);
-      syncTagControls();
+      renderTagBar();
+      renderTechBar();
       render();
     }
 
-    // 搜索：输入即时过滤（防抖 180ms）；手机上按「搜索」键立即生效
-    el.search.addEventListener('input', debounce(function (e) {
-      applyFilters(e.target.value, undefined);
+    el.searchInput.addEventListener('input', debounce(function (e) {
+      apply({ keyword: e.target.value });
     }, 180));
-    el.search.addEventListener('search', function (e) {   // type=search 的原生清除按钮
-      applyFilters(e.target.value, undefined);
+    el.searchInput.addEventListener('search', function (e) { apply({ keyword: e.target.value }); });
+    el.searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); apply({ keyword: el.searchInput.value }); }
     });
-    el.search.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); applyFilters(el.search.value, undefined); }
-    });
-
-    // 清空搜索
     el.searchClear.addEventListener('click', function () {
-      el.search.value = '';
-      applyFilters('', undefined);
-      el.search.focus();
+      el.searchInput.value = '';
+      apply({ keyword: '' });
+      el.searchInput.focus();
     });
 
-    // 下拉框切换标签（手机端）
-    el.tagSelect.addEventListener('change', function (e) {
-      applyFilters(undefined, e.target.value);
-    });
-
-    // 按钮组 / 卡片内标签：统一用事件委托处理
+    // 标签 / 技术栈 / 卡片内胶囊：统一事件委托
     document.addEventListener('click', function (e) {
-      // ① 工具栏标签按钮
-      var filterBtn = e.target.closest('.tag-filter');
-      if (filterBtn) {
-        var tag = filterBtn.getAttribute('data-tag');
-        // 再次点击已选中的标签 = 取消选择
-        applyFilters(undefined, tag === state.activeTag ? '' : tag);
+      var tagChip = e.target.closest('[data-tag]');
+      if (tagChip) {
+        var t = tagChip.getAttribute('data-tag');
+        apply({ tag: t === state.tag ? '' : t });
         return;
       }
-      // ② 卡片上的标签胶囊：点击即按该标签筛选
-      var pill = e.target.closest('.tag-pill');
-      if (pill) {
-        applyFilters(undefined, pill.getAttribute('data-tag'));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+      var techChip = e.target.closest('[data-tech]');
+      if (techChip) {
+        var k = techChip.getAttribute('data-tech');
+        apply({ tech: k === state.tech ? '' : k });
       }
     });
 
-    // 重置
-    function resetAll() {
-      el.search.value = '';
-      applyFilters('', '');
-    }
-    el.reset.addEventListener('click', resetAll);
-    el.emptyReset.addEventListener('click', resetAll);
-
-    /* ---------- 主题切换（浅色 / 深色） ---------- */
-    function syncThemeIcon() {
-      var dark = document.documentElement.classList.contains('dark');
-      el.iconSun.classList.toggle('hidden', !dark);
-      el.iconMoon.classList.toggle('hidden', dark);
-    }
-    syncThemeIcon();
-
-    el.themeToggle.addEventListener('click', function () {
-      var dark = document.documentElement.classList.toggle('dark');
-      try { localStorage.setItem('blog-theme', dark ? 'dark' : 'light'); } catch (e) {}
-      syncThemeIcon();
+    el.moreTagsBtn.addEventListener('click', function () {
+      expandedTags = !expandedTags;
+      renderTagBar();
     });
 
-    /* ---------------------------------------------------------------
-     * 5. 启动
-     * ------------------------------------------------------------- */
-    renderSkeleton(6);                 // 先显示骨架屏
+    el.sortSelect.addEventListener('change', function (e) {
+      state.sort = e.target.value;
+      render();
+    });
+
+    function resetAll() {
+      el.searchInput.value = '';
+      state.sort = 'recommend';
+      el.sortSelect.value = 'recommend';
+      expandedTags = false;
+      apply({ keyword: '', tag: '', tech: '' });
+    }
+    el.resetBtn.addEventListener('click', resetAll);
+    el.emptyReset.addEventListener('click', resetAll);
+
+    /* ---------- 视图切换（记忆在 localStorage） ---------- */
+    function syncViewIcon() {
+      var isGrid = state.view === 'grid';
+      el.iconViewList.classList.toggle('hidden', !isGrid);
+      el.iconViewGrid.classList.toggle('hidden', isGrid);
+    }
+    el.viewToggle.addEventListener('click', function () {
+      state.view = state.view === 'grid' ? 'list' : 'grid';
+      try { localStorage.setItem(LS.view, state.view); } catch (e) {}
+      syncViewIcon();
+      render();
+    });
+
+    /* ---------- 随机逛逛 ---------- */
+    function showRandom() {
+      var pool = activeBlogs();
+      if (!pool.length) return;
+      var b = pool[Math.floor(Math.random() * pool.length)];
+
+      el.randomName.textContent = b.name;
+      el.randomMeta.textContent = [b.author, b.tech, hostOf(b.url)].filter(Boolean).join(' · ');
+      el.randomDesc.textContent = b.description || '这个博客还没有写简介';
+      if (b.message) {
+        el.randomMessage.textContent = '「' + b.message + '」';
+        el.randomMessage.classList.remove('hidden');
+      } else {
+        el.randomMessage.classList.add('hidden');
+      }
+      el.randomGo.href = b.url;
+      el.randomModal.classList.remove('hidden');
+      el.randomModal.classList.add('flex');
+      el.randomAgain.focus();
+    }
+
+    function hideRandom() {
+      el.randomModal.classList.add('hidden');
+      el.randomModal.classList.remove('flex');
+    }
+
+    el.randomBtn.addEventListener('click', showRandom);
+    el.randomAgain.addEventListener('click', showRandom);
+    el.randomClose.addEventListener('click', hideRandom);
+    el.randomMask.addEventListener('click', hideRandom);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !el.randomModal.classList.contains('hidden')) hideRandom();
+    });
+
+    /* ---------- 主题三态：system → light → dark → system ---------- */
+    var themeOrder = ['system', 'light', 'dark'];
+    var mql = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function currentTheme() {
+      var v = null;
+      try { v = localStorage.getItem(LS.theme); } catch (e) {}
+      return themeOrder.indexOf(v) > -1 ? v : 'system';
+    }
+
+    function applyTheme() {
+      var t = currentTheme();
+      var dark = t === 'dark' || (t === 'system' && mql.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      el.iconSystem.classList.toggle('hidden', t !== 'system');
+      el.iconSun.classList.toggle('hidden', t !== 'light');
+      el.iconMoon.classList.toggle('hidden', t !== 'dark');
+      el.themeToggle.title = '当前：' +
+        { system: '跟随系统', light: '浅色', dark: '深色' }[t] + '，点击切换';
+    }
+
+    el.themeToggle.addEventListener('click', function () {
+      var next = themeOrder[(themeOrder.indexOf(currentTheme()) + 1) % themeOrder.length];
+      try { localStorage.setItem(LS.theme, next); } catch (e) {}
+      applyTheme();
+    });
+
+    // 跟随系统时，系统主题变化要实时响应
+    if (mql.addEventListener) mql.addEventListener('change', function () { applyTheme(); });
+    else if (mql.addListener) mql.addListener(function () { applyTheme(); });
+
+    // 跨过 640px 断点时，标签胶囊要在「可点」与「纯展示」之间切换，需要重绘一次
+    function onBreakpointChange() { render(); }
+    if (mqDesktop.addEventListener) mqDesktop.addEventListener('change', onBreakpointChange);
+    else if (mqDesktop.addListener) mqDesktop.addListener(onBreakpointChange);
+
+    /* ===============================================================
+     * 9. 启动
+     * ============================================================= */
+    try {
+      var savedView = localStorage.getItem(LS.view);
+      if (savedView === 'grid' || savedView === 'list') state.view = savedView;
+    } catch (e) {}
+
+    syncViewIcon();
+    applyTheme();
+    renderSkeleton(6);
+
     loadBlogs()
       .then(function () {
         state.loading = false;
-        renderTagControls();
-        applyFilters(state.keyword, state.activeTag);
-        // 头部统计文案
-        el.stats.textContent = '已收录 ' + state.blogs.length + ' 个博客 · ' +
-          Object.keys(state.blogs.reduce(function (acc, b) {
-            b.tags.forEach(function (t) { acc[t] = 1; });
-            return acc;
-          }, {})).length + ' 个标签';
+        renderStats();
+        renderTagBar();
+        renderTechBar();
+        renderDiligent();
+        renderDormant();
+        render();
       })
       .catch(function (err) {
         state.loading = false;
@@ -633,10 +1085,10 @@
         render();
       });
 
-    /* ---------------------------------------------------------------
-     * 6. Giscus 评论：在此处取消注释并填入你自己的配置即可启用
-     *    （配置获取地址：https://giscus.app/zh-CN）
-     * ------------------------------------------------------------- */
+    /* ===============================================================
+     * 10. Giscus 评论：填入自己的配置后取消注释即可启用
+     *     配置获取地址：https://giscus.app/zh-CN
+     * ============================================================= */
     /*
     (function initGiscus() {
       var s = document.createElement('script');
@@ -655,9 +1107,9 @@
       s.setAttribute('data-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
       s.setAttribute('data-lang', 'zh-CN');
       s.setAttribute('data-loading', 'lazy');
-      el.comments.appendChild(s);
+      el.giscusComments.appendChild(s);
 
-      // 主题切换时同步 iframe 内评论框的主题
+      // 页面主题切换时同步评论框主题
       el.themeToggle.addEventListener('click', function () {
         var iframe = document.querySelector('iframe.giscus-frame');
         if (!iframe) return;
@@ -670,5 +1122,6 @@
     */
   })();
   </script>
+  <!-- build:script:end -->
 </body>
 </html>

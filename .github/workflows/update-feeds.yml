@@ -1,0 +1,49 @@
+name: 更新博客新鲜度
+
+# 每天北京时间 12:00（UTC 04:00）抓取一次各博客的 RSS，
+# 把最新一篇的发布时间写回 data/blogs.json 的 updated 字段。
+# 也可以在 Actions 页面手动触发（workflow_dispatch）。
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+# 允许 workflow 把改动 push 回仓库。注意：用 GITHUB_TOKEN 的 push
+# 不会再次触发其他 workflow，所以不存在自我循环的风险。
+permissions:
+  contents: write
+
+# 同一时间只跑一个，避免两次抓取同时写文件
+concurrency:
+  group: update-feeds
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 准备 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 抓取 RSS 并更新 updated 字段
+        run: node tools/update-feeds.mjs
+
+      - name: 同步 noscript 兜底与 sitemap
+        run: node tools/build.mjs
+
+      - name: 提交改动
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "没有变化，跳过提交。"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/blogs.json index.html sitemap.xml
+          git commit -m "chore: 自动更新博客新鲜度 ($(date -u +%Y-%m-%d))"
+          git push
