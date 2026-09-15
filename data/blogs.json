@@ -1,0 +1,23 @@
+[
+  {
+    "name": "码农小站",
+    "url": "https://example.com",
+    "author": "阿柴",
+    "description": "一个前端工程师的独立博客，记录从零搭建博客的全过程，分享 JavaScript、CSS 与工程化的踩坑笔记。",
+    "tags": ["技术", "前端", "建站"]
+  },
+  {
+    "name": "深夜书房",
+    "url": "https://example.org",
+    "author": "林小满",
+    "description": "读书、电影与生活随笔，每周更新一篇长文，偶尔写点关于写作本身的思考。",
+    "tags": ["生活", "读书", "随笔"]
+  },
+  {
+    "name": "像素与代码",
+    "url": "https://example.net",
+    "author": "Kai",
+    "description": "设计与开发的交叉地带：独立开发作品复盘、UI 细节拆解，以及我用来记录灵感的小工具集。",
+    "tags": ["设计", "独立开发", "技术"]
+  }
+]

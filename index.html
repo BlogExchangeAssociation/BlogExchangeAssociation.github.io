@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!-- 移动端适配：微信内置浏览器 / 手机 Safari / Chrome 均依赖此标签 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>博客交流协会 · 独立博客导航</title>
+  <meta name="description" content="博客交流协会：收录独立博客，分享搭建经验，欢迎交流与提交。" />
+  <meta name="theme-color" content="#4f46e5" />
+
+  <!-- ===== 样式：Tailwind CSS（CDN 版，无需打包工具） ===== -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    /*
+     * 在 Tailwind 生效前同步执行：
+     * 1) 配置 Tailwind（开启 class 模式的暗色主题）
+     * 2) 读取用户上次选择的主题，避免页面闪烁（FOUC）
+     */
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('blog-theme'); } catch (e) { /* 隐私模式下可能抛错，忽略 */ }
+      if (saved === 'dark') document.documentElement.classList.add('dark');
+    })();
+
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"',
+                   '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- 少量自定义样式：骨架屏动画、卡片进场、细滚动条 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      /* 加载中的骨架屏微光效果 */
+      @keyframes shimmer { 100% { transform: translateX(100%); } }
+      .skeleton { position: relative; overflow: hidden; }
+      .skeleton::after {
+        content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+        background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,.45) 60%, rgba(255,255,255,0) 100%);
+        animation: shimmer 1.4s infinite;
+      }
+      /* 卡片淡入上浮 */
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      .fade-up { animation: fadeUp .35s ease-out both; }
+      /* 简介最多显示 3 行，超出省略（line-clamp 兜底，兼容较旧的 Tailwind CDN） */
+      .line-clamp-3 {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      /* 隐藏 type=search 的原生清除按钮，统一使用自定义按钮 */
+      input[type='search']::-webkit-search-decoration,
+      input[type='search']::-webkit-search-cancel-button,
+      input[type='search']::-webkit-search-results-button,
+      input[type='search']::-webkit-search-results-decoration { -webkit-appearance: none; appearance: none; }
+      /* 尊重系统的「减少动态效果」偏好 */
+      @media (prefers-reduced-motion: reduce) {
+        .skeleton::after, .fade-up { animation: none !important; }
+      }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-50 text-slate-800 antialiased
+             dark:bg-slate-950 dark:text-slate-200
+             flex flex-col transition-colors duration-300">
+
+  <!-- ===================== 1. 头部区域 ===================== -->
+  <header class="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white">
+    <!-- 背景装饰光斑（纯装饰，屏幕阅读器忽略） -->
+    <div aria-hidden="true" class="pointer-events-none absolute -top-24 -left-16 h-64 w-64 rounded-full bg-white/20 blur-3xl"></div>
+    <div aria-hidden="true" class="pointer-events-none absolute -bottom-28 -right-10 h-72 w-72 rounded-full bg-sky-300/25 blur-3xl"></div>
+
+    <div class="relative mx-auto w-full max-w-6xl px-4 pb-12 pt-8 sm:px-6 sm:pb-16 sm:pt-10 lg:px-8">
+      <!-- 右上角：主题切换 -->
+      <div class="flex justify-end">
+        <button id="theme-toggle" type="button" title="切换深色 / 浅色主题" aria-label="切换深色 / 浅色主题"
+                class="rounded-full border border-white/30 bg-white/10 p-2.5 backdrop-blur transition hover:bg-white/20
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95">
+          <!-- 浅色模式下显示月亮（点击进入深色） -->
+          <svg id="icon-moon" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+          <!-- 深色模式下显示太阳 -->
+          <svg id="icon-sun" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 标题与简介 -->
+      <div class="mt-2 text-center sm:mt-0">
+        <h1 class="text-3xl font-extrabold tracking-tight drop-shadow-sm sm:text-5xl">
+          博客交流协会
+        </h1>
+        <p class="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-white/90 sm:mt-4 sm:text-base">
+          收录独立博客，分享搭建经验，欢迎交流与提交
+        </p>
+        <!-- 统计信息：由 JS 填充 -->
+        <p id="site-stats" class="mt-4 text-xs text-white/75 sm:text-sm"></p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== 2. 工具栏（搜索 + 标签筛选） ===================== -->
+  <!-- sticky + 毛玻璃：手机端滚动时始终可用 -->
+  <div class="sticky top-0 z-30 border-b border-slate-200/70 bg-slate-50/85 backdrop-blur
+              dark:border-slate-800 dark:bg-slate-950/85">
+    <div class="mx-auto w-full max-w-6xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+      <div class="flex flex-col gap-3">
+
+        <!-- 搜索框 -->
+        <div class="relative">
+          <label for="search-input" class="sr-only">搜索博客</label>
+          <svg class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input id="search-input" type="search" autocomplete="off" enterkeyhint="search"
+                 placeholder="搜索博客名称、作者或简介…"
+                 class="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-11 text-sm shadow-sm
+                        placeholder:text-slate-400
+                        focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30
+                        dark:border-slate-700 dark:bg-slate-900 dark:placeholder:text-slate-500" />
+          <!-- 一键清空搜索 -->
+          <button id="search-clear" type="button" aria-label="清空搜索"
+                  class="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-full p-1 text-slate-400
+                         transition hover:bg-slate-100 hover:text-slate-600
+                         dark:hover:bg-slate-800 dark:hover:text-slate-200">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 标签筛选：窄屏用下拉框，宽屏用按钮组 -->
+        <div class="flex items-center gap-2">
+          <!-- 下拉框（手机端） -->
+          <label for="tag-select" class="sr-only">按标签筛选</label>
+          <select id="tag-select"
+                  class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm
+                         focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30
+                         dark:border-slate-700 dark:bg-slate-900 sm:hidden">
+            <option value="">全部标签</option>
+          </select>
+
+          <!-- 按钮组（平板 / 电脑端），由 JS 渲染 -->
+          <div id="tag-filters" role="group" aria-label="按标签筛选"
+               class="hidden flex-wrap items-center gap-2 sm:flex"></div>
+
+          <!-- 重置按钮 -->
+          <button id="reset-btn" type="button"
+                  class="ml-auto hidden shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2
+                         text-xs font-medium text-slate-600 shadow-sm transition
+                         hover:border-indigo-300 hover:text-indigo-600
+                         dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-indigo-400
+                         inline-flex">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
+            </svg>
+            重置
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 3. 主体内容 ===================== -->
+  <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+
+    <!-- 结果计数 -->
+    <p id="result-count" class="mb-4 text-xs text-slate-500 dark:text-slate-400 sm:text-sm" aria-live="polite"></p>
+
+    <!-- 博客卡片网格：手机 1 列 → 平板 2 列 → 电脑 3 列 -->
+    <section id="blog-grid" aria-label="博客列表"
+             class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3"></section>
+
+    <!-- 空状态（无搜索结果时显示） -->
+    <div id="empty-state" class="hidden py-16 text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+        <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+        </svg>
+      </div>
+      <p class="mt-4 text-sm font-medium text-slate-600 dark:text-slate-300">没有找到匹配的博客</p>
+      <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">换个关键词，或点击「重置」查看全部</p>
+      <button id="empty-reset" type="button"
+              class="mt-5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition
+                     hover:bg-indigo-700 active:scale-95">
+        查看全部博客
+      </button>
+    </div>
+
+    <!-- ===================== 4. 评论区占位（后续接入 Giscus） ===================== -->
+    <section class="mt-12 border-t border-slate-200 pt-8 dark:border-slate-800">
+      <h2 class="mb-1 text-lg font-bold sm:text-xl">评论区</h2>
+      <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
+        欢迎在这里交流、推荐或自荐博客（基于 GitHub Discussions 的 Giscus 评论系统）
+      </p>
+      <!-- Giscus 脚本会把评论框挂载到这个容器里 -->
+      <div id="giscus-comments"></div>
+    </section>
+  </main>
+
+  <!-- ===================== 页脚 ===================== -->
+  <footer class="border-t border-slate-200 bg-white/60 py-6 dark:border-slate-800 dark:bg-slate-900/40">
+    <div class="mx-auto w-full max-w-6xl px-4 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400 sm:px-6 lg:px-8">
+      <p>博客交流协会 · 独立博客导航</p>
+      <p class="mt-1">
+        想推荐自己的博客？欢迎在下方评论区留言，或到
+        <a id="repo-link" href="https://github.com/BlogExchangeAssociation/BlogExchangeAssociation.github.io"
+           target="_blank" rel="noopener noreferrer"
+           class="font-medium text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400">GitHub 仓库</a>
+        提交 Issue。
+      </p>
+    </div>
+  </footer>
+
+  <!-- ===================== 页面逻辑 ===================== -->
+  <script>
+  (function () {
+    'use strict';
+
+    /* ---------------------------------------------------------------
+     * 0. 配置与全局状态
+     * ------------------------------------------------------------- */
+    var DATA_URL = './data/blogs.json';   // 数据源：相对路径，兼容 GitHub Pages 子路径
+    var ALL_TAGS = '全部';                 // 「全部标签」的显示文案
+
+    var state = {
+      blogs: [],        // 全部博客数据
+      keyword: '',      // 当前搜索关键词（已去除首尾空格，未转小写）
+      activeTag: '',    // 当前选中的标签（'' 表示全部）
+      loading: true,    // 是否正在加载数据
+      error: ''         // 加载错误信息
+    };
+
+    // 常用 DOM 引用
+    var el = {
+      grid:        document.getElementById('blog-grid'),
+      empty:       document.getElementById('empty-state'),
+      count:       document.getElementById('result-count'),
+      stats:       document.getElementById('site-stats'),
+      search:      document.getElementById('search-input'),
+      searchClear: document.getElementById('search-clear'),
+      tagSelect:   document.getElementById('tag-select'),
+      tagFilters:  document.getElementById('tag-filters'),
+      reset:       document.getElementById('reset-btn'),
+      emptyReset:  document.getElementById('empty-reset'),
+      themeToggle: document.getElementById('theme-toggle'),
+      iconSun:     document.getElementById('icon-sun'),
+      iconMoon:    document.getElementById('icon-moon'),
+      comments:    document.getElementById('giscus-comments')
+    };
+
+    /* ---------------------------------------------------------------
+     * 1. 工具函数
+     * ------------------------------------------------------------- */
+
+    /** HTML 转义：所有来自 JSON 的文本都必须经过它，防止 XSS 或标签破坏布局 */
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    /** 防抖：避免输入每个字符都立刻重绘 */
+    function debounce(fn, delay) {
+      var timer = null;
+      return function () {
+        var args = arguments, ctx = this;
+        clearTimeout(timer);
+        timer = setTimeout(function () { fn.apply(ctx, args); }, delay);
+      };
+    }
+
+    /** 只保留 http/https 链接，避免 javascript: 之类的伪协议 */
+    function safeUrl(url) {
+      var u = String(url || '').trim();
+      return /^https?:\/\//i.test(u) ? u : '';
+    }
+
+    /** 根据 URL 取域名，用于卡片上展示（取不到就返回空） */
+    function hostOf(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ''); }
+      catch (e) { return ''; }
+    }
+
+    /* ---------------------------------------------------------------
+     * 2. 数据加载（fetch ./data/blogs.json）
+     * ------------------------------------------------------------- */
+
+    /** 校验并规整单条数据，过滤掉缺少必要字段的脏数据 */
+    function normalize(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      var url = safeUrl(raw.url);
+      var name = String(raw.name || '').trim();
+      if (!name || !url) return null;              // 名称和链接是必填项
+
+      var tags = Array.isArray(raw.tags)
+        ? raw.tags.map(function (t) { return String(t).trim(); }).filter(Boolean)
+        : [];
+
+      return {
+        name: name,
+        url: url,
+        author: String(raw.author || '').trim() || '匿名',
+        description: String(raw.description || '').trim(),
+        tags: tags
+      };
+    }
+
+    /** 拉取数据文件 */
+    function loadBlogs() {
+      return fetch(DATA_URL, { cache: 'no-cache' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+          return res.json();
+        })
+        .then(function (data) {
+          // 兼容「直接是数组」和「{ blogs: [...] }」两种写法
+          var list = Array.isArray(data) ? data : (data && Array.isArray(data.blogs) ? data.blogs : []);
+          if (!Array.isArray(list)) throw new Error('数据格式不是数组');
+
+          state.blogs = list.map(normalize).filter(Boolean);
+        });
+    }
+
+    /* ---------------------------------------------------------------
+     * 3. 筛选与渲染
+     * ------------------------------------------------------------- */
+
+    /** 判断一条博客是否符合当前「关键词 + 标签」条件 */
+    function match(blog, keyword, tag) {
+      // ① 标签筛选
+      if (tag && blog.tags.indexOf(tag) === -1) return false;
+      // ② 关键词筛选：名称 / 作者 / 简介 / 标签，任一命中即可
+      if (!keyword) return true;
+      var kw = keyword.toLowerCase();
+      return [blog.name, blog.author, blog.description, blog.tags.join(' ')]
+        .join(' ')
+        .toLowerCase()
+        .indexOf(kw) !== -1;
+    }
+
+    /** 生成单张卡片的 HTML */
+    function cardHtml(blog, index) {
+      var host = hostOf(blog.url);
+
+      var tagPills = blog.tags.map(function (tag) {
+        return '<button type="button" data-tag="' + escapeHtml(tag) + '" ' +
+               'class="tag-pill rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 ' +
+               'transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">' +
+               escapeHtml(tag) + '</button>';
+      }).join('');
+
+      return '' +
+        '<article class="fade-up group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ' +
+                 'transition duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-lg ' +
+                 'dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500/50"' +
+                 ' style="animation-delay:' + Math.min(index * 40, 400) + 'ms">' +
+
+          // 标题行：名称（新窗口打开）
+          '<div class="flex items-start justify-between gap-3">' +
+            '<h3 class="min-w-0 text-base font-bold leading-snug sm:text-lg">' +
+              '<a href="' + escapeHtml(blog.url) + '" target="_blank" rel="noopener noreferrer" ' +
+                 'class="text-slate-900 transition hover:text-indigo-600 focus:outline-none focus-visible:ring-2 ' +
+                 'focus-visible:ring-indigo-500/40 dark:text-white dark:hover:text-indigo-400">' +
+                escapeHtml(blog.name) +
+              '</a>' +
+            '</h3>' +
+            // 外链图标，强化「点击跳转」的暗示
+            '<svg class="mt-1 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-indigo-500 ' +
+                 'dark:text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+                 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />' +
+              '<path d="M15 3h6v6" /><path d="M10 14 21 3" />' +
+            '</svg>' +
+          '</div>' +
+
+          // 域名 + 作者
+          '<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400 dark:text-slate-500">' +
+            (host ? '<span class="inline-flex items-center gap-1">' +
+              '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+                   'stroke-linecap="round" aria-hidden="true">' +
+                '<circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />' +
+              '</svg>' + escapeHtml(host) + '</span>' : '') +
+            '<span class="inline-flex items-center gap-1">' +
+              '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+                   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M20 21a8 8 0 1 0-16 0" /><circle cx="12" cy="8" r="4" />' +
+              '</svg>' + escapeHtml(blog.author) +
+            '</span>' +
+          '</p>' +
+
+          // 简介：占满剩余高度，保证不同卡片底部对齐
+          '<p class="mt-3 line-clamp-3 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">' +
+            (blog.description ? escapeHtml(blog.description) : '<span class="text-slate-400 dark:text-slate-600">这个博客还没有写简介</span>') +
+          '</p>' +
+
+          // 标签
+          (tagPills
+            ? '<div class="mt-4 flex flex-wrap gap-1.5">' + tagPills + '</div>'
+            : '') +
+        '</article>';
+    }
+
+    /** 渲染标签筛选控件（按钮组 + 下拉框），只生成一次 */
+    function renderTagControls() {
+      // 统计每个标签出现的次数，按「次数多的在前，其次按拼音」排序
+      var freq = {};
+      state.blogs.forEach(function (b) {
+        b.tags.forEach(function (t) { freq[t] = (freq[t] || 0) + 1; });
+      });
+      var tags = Object.keys(freq).sort(function (a, b) {
+        return freq[b] - freq[a] || a.localeCompare(b, 'zh-Hans-CN');
+      });
+
+      // 下拉框（手机端）
+      el.tagSelect.innerHTML = '<option value="">' + ALL_TAGS + '标签（' + state.blogs.length + '）</option>' +
+        tags.map(function (t) {
+          return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '（' + freq[t] + '）</option>';
+        }).join('');
+
+      // 按钮组（宽屏）：全部 + 各标签
+      var buttons = [tagButtonHtml('', ALL_TAGS + ' ' + state.blogs.length)];
+      tags.forEach(function (t) {
+        buttons.push(tagButtonHtml(t, escapeHtml(t) + ' ' + freq[t]));
+      });
+      el.tagFilters.innerHTML = buttons.join('');
+    }
+
+    /** 标签按钮模板 */
+    function tagButtonHtml(tag, label) {
+      return '<button type="button" data-tag="' + escapeHtml(tag) + '" ' +
+             'class="tag-filter whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition sm:text-sm">' +
+             label + '</button>';
+    }
+
+    /** 同步标签控件的选中样式 */
+    function syncTagControls() {
+      var active = state.activeTag;
+
+      Array.prototype.forEach.call(el.tagFilters.querySelectorAll('.tag-filter'), function (btn) {
+        var on = btn.getAttribute('data-tag') === active;
+        btn.className = 'tag-filter whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition sm:text-sm ' +
+          (on
+            ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
+            : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 ' +
+              'dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-indigo-500/60 dark:hover:text-indigo-400');
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+
+      el.tagSelect.value = active;
+    }
+
+    /** 渲染骨架屏（加载中占位） */
+    function renderSkeleton(n) {
+      var card = '' +
+        '<div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">' +
+          '<div class="skeleton h-5 w-2/3 rounded bg-slate-200 dark:bg-slate-800"></div>' +
+          '<div class="skeleton mt-3 h-3 w-1/3 rounded bg-slate-200 dark:bg-slate-800"></div>' +
+          '<div class="skeleton mt-4 h-3 w-full rounded bg-slate-200 dark:bg-slate-800"></div>' +
+          '<div class="skeleton mt-2 h-3 w-5/6 rounded bg-slate-200 dark:bg-slate-800"></div>' +
+          '<div class="mt-5 flex gap-2">' +
+            '<div class="skeleton h-6 w-14 rounded-full bg-slate-200 dark:bg-slate-800"></div>' +
+            '<div class="skeleton h-6 w-16 rounded-full bg-slate-200 dark:bg-slate-800"></div>' +
+          '</div>' +
+        '</div>';
+      el.grid.innerHTML = new Array(n + 1).join(card);
+    }
+
+    /** 主渲染函数 */
+    function render() {
+      // ① 加载中 / 出错：显示占位或错误提示
+      if (state.loading) {
+        el.count.textContent = '正在加载博客列表…';
+        el.empty.classList.add('hidden');
+        renderSkeleton(6);
+        return;
+      }
+      if (state.error) {
+        el.grid.innerHTML = '';
+        el.count.textContent = '';
+        el.empty.classList.remove('hidden');
+        el.empty.querySelector('p').textContent = '博客数据加载失败';
+        el.empty.querySelectorAll('p')[1].textContent = state.error + '（请确认 data/blogs.json 是否存在，且通过 http 服务访问而非直接双击打开文件）';
+        el.emptyReset.classList.add('hidden');
+        return;
+      }
+
+      // ② 正常渲染
+      var list = state.blogs.filter(function (b) { return match(b, state.keyword, state.activeTag); });
+
+      el.grid.innerHTML = list.map(cardHtml).join('');
+      el.emptyReset.classList.remove('hidden');
+      el.empty.classList.toggle('hidden', list.length > 0);
+
+      // 结果计数
+      var isFiltering = state.keyword || state.activeTag;
+      el.count.textContent = isFiltering
+        ? '共 ' + list.length + ' 个结果（总计 ' + state.blogs.length + ' 个博客）'
+        : '共收录 ' + state.blogs.length + ' 个博客';
+
+      // 有筛选条件时显示「重置」按钮
+      el.reset.classList.toggle('hidden', !isFiltering);
+
+      // 空状态文案（首次加载无数据 vs 筛选无结果）
+      if (!list.length) {
+        var ps = el.empty.querySelectorAll('p');
+        ps[0].textContent = isFiltering ? '没有找到匹配的博客' : '还没有收录任何博客';
+        ps[1].textContent = isFiltering ? '换个关键词，或点击「重置」查看全部' : '欢迎到评论区推荐你的博客';
+      }
+    }
+
+    /* ---------------------------------------------------------------
+     * 4. 事件绑定
+     * ------------------------------------------------------------- */
+
+    /** 应用筛选条件（统一入口） */
+    function applyFilters(keyword, tag) {
+      if (typeof keyword === 'string') state.keyword = keyword.trim();
+      if (typeof tag === 'string') state.activeTag = tag;
+      el.searchClear.classList.toggle('hidden', !state.keyword);
+      syncTagControls();
+      render();
+    }
+
+    // 搜索：输入即时过滤（防抖 180ms）；手机上按「搜索」键立即生效
+    el.search.addEventListener('input', debounce(function (e) {
+      applyFilters(e.target.value, undefined);
+    }, 180));
+    el.search.addEventListener('search', function (e) {   // type=search 的原生清除按钮
+      applyFilters(e.target.value, undefined);
+    });
+    el.search.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); applyFilters(el.search.value, undefined); }
+    });
+
+    // 清空搜索
+    el.searchClear.addEventListener('click', function () {
+      el.search.value = '';
+      applyFilters('', undefined);
+      el.search.focus();
+    });
+
+    // 下拉框切换标签（手机端）
+    el.tagSelect.addEventListener('change', function (e) {
+      applyFilters(undefined, e.target.value);
+    });
+
+    // 按钮组 / 卡片内标签：统一用事件委托处理
+    document.addEventListener('click', function (e) {
+      // ① 工具栏标签按钮
+      var filterBtn = e.target.closest('.tag-filter');
+      if (filterBtn) {
+        var tag = filterBtn.getAttribute('data-tag');
+        // 再次点击已选中的标签 = 取消选择
+        applyFilters(undefined, tag === state.activeTag ? '' : tag);
+        return;
+      }
+      // ② 卡片上的标签胶囊：点击即按该标签筛选
+      var pill = e.target.closest('.tag-pill');
+      if (pill) {
+        applyFilters(undefined, pill.getAttribute('data-tag'));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+    // 重置
+    function resetAll() {
+      el.search.value = '';
+      applyFilters('', '');
+    }
+    el.reset.addEventListener('click', resetAll);
+    el.emptyReset.addEventListener('click', resetAll);
+
+    /* ---------- 主题切换（浅色 / 深色） ---------- */
+    function syncThemeIcon() {
+      var dark = document.documentElement.classList.contains('dark');
+      el.iconSun.classList.toggle('hidden', !dark);
+      el.iconMoon.classList.toggle('hidden', dark);
+    }
+    syncThemeIcon();
+
+    el.themeToggle.addEventListener('click', function () {
+      var dark = document.documentElement.classList.toggle('dark');
+      try { localStorage.setItem('blog-theme', dark ? 'dark' : 'light'); } catch (e) {}
+      syncThemeIcon();
+    });
+
+    /* ---------------------------------------------------------------
+     * 5. 启动
+     * ------------------------------------------------------------- */
+    renderSkeleton(6);                 // 先显示骨架屏
+    loadBlogs()
+      .then(function () {
+        state.loading = false;
+        renderTagControls();
+        applyFilters(state.keyword, state.activeTag);
+        // 头部统计文案
+        el.stats.textContent = '已收录 ' + state.blogs.length + ' 个博客 · ' +
+          Object.keys(state.blogs.reduce(function (acc, b) {
+            b.tags.forEach(function (t) { acc[t] = 1; });
+            return acc;
+          }, {})).length + ' 个标签';
+      })
+      .catch(function (err) {
+        state.loading = false;
+        state.error = (err && err.message) ? err.message : String(err);
+        console.error('[博客交流协会] 数据加载失败：', err);
+        render();
+      });
+
+    /* ---------------------------------------------------------------
+     * 6. Giscus 评论：在此处取消注释并填入你自己的配置即可启用
+     *    （配置获取地址：https://giscus.app/zh-CN）
+     * ------------------------------------------------------------- */
+    /*
+    (function initGiscus() {
+      var s = document.createElement('script');
+      s.src = 'https://giscus.app/client.js';
+      s.async = true;
+      s.crossOrigin = 'anonymous';
+      s.setAttribute('data-repo', 'BlogExchangeAssociation/BlogExchangeAssociation.github.io');
+      s.setAttribute('data-repo-id', 'R_xxxxxxxx');          // ← 换成你的 repo-id
+      s.setAttribute('data-category', 'Announcements');
+      s.setAttribute('data-category-id', 'DIC_xxxxxxxx');    // ← 换成你的 category-id
+      s.setAttribute('data-mapping', 'pathname');
+      s.setAttribute('data-strict', '0');
+      s.setAttribute('data-reactions-enabled', '1');
+      s.setAttribute('data-emit-metadata', '0');
+      s.setAttribute('data-input-position', 'bottom');
+      s.setAttribute('data-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      s.setAttribute('data-lang', 'zh-CN');
+      s.setAttribute('data-loading', 'lazy');
+      el.comments.appendChild(s);
+
+      // 主题切换时同步 iframe 内评论框的主题
+      el.themeToggle.addEventListener('click', function () {
+        var iframe = document.querySelector('iframe.giscus-frame');
+        if (!iframe) return;
+        iframe.contentWindow.postMessage(
+          { giscus: { setConfig: { theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light' } } },
+          'https://giscus.app'
+        );
+      });
+    })();
+    */
+  })();
+  </script>
+</body>
+</html>
