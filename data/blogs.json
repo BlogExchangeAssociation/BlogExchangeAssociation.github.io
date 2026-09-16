@@ -4,67 +4,95 @@
     "url": "https://example.com",
     "author": "阿柴",
     "description": "一个前端工程师的独立博客，记录从零搭建博客的全过程，分享 JavaScript、CSS 与工程化的踩坑笔记。",
-    "tags": ["技术", "前端", "建站"],
+    "tags": [
+      "技术",
+      "前端",
+      "建站"
+    ],
     "tech": "Hexo",
     "feed": "https://example.com/atom.xml",
     "message": "写博客第五年，希望还能再写十年。",
     "added": "2026-03-01",
     "updated": "2026-09-12",
-    "featured": true
+    "featured": true,
+    "feedError": "HTTP 404"
   },
   {
     "name": "深夜书房",
     "url": "https://example.org",
     "author": "林小满",
     "description": "读书、电影与生活随笔，每周更新一篇长文，偶尔写点关于写作本身的思考。",
-    "tags": ["生活", "读书", "随笔"],
+    "tags": [
+      "生活",
+      "读书",
+      "随笔"
+    ],
     "tech": "Typecho",
     "feed": "https://example.org/feed",
     "message": "把想说的话写下来，就不算白活。",
     "added": "2026-04-18",
-    "updated": "2026-09-08"
+    "updated": "2026-09-08",
+    "feedError": "HTTP 404"
   },
   {
     "name": "像素与代码",
     "url": "https://example.net",
     "author": "Kai",
     "description": "设计与开发的交叉地带：独立开发作品复盘、UI 细节拆解，以及我用来记录灵感的小工具集。",
-    "tags": ["设计", "独立开发", "技术"],
+    "tags": [
+      "设计",
+      "独立开发",
+      "技术"
+    ],
     "tech": "Astro",
     "feed": "https://example.net/rss.xml",
     "message": "做点小东西，然后把它讲清楚。",
     "added": "2026-05-06",
-    "updated": "2026-08-30"
+    "updated": "2026-08-30",
+    "feedError": "HTTP 404"
   },
   {
     "name": "山间来信",
     "url": "https://example.edu",
     "author": "老周",
     "description": "住在山里的第十年，写植物、天气、修屋子和偶尔来访的人。更新很慢，但一直在写。",
-    "tags": ["生活", "自然", "随笔"],
+    "tags": [
+      "生活",
+      "自然",
+      "随笔"
+    ],
     "tech": "Hugo",
     "feed": "https://example.edu/index.xml",
     "message": "慢一点没关系，别停就好。",
     "added": "2026-02-11",
-    "updated": "2026-06-20"
+    "updated": "2026-06-20",
+    "feedError": "HTTP 404"
   },
   {
     "name": "字节手记",
     "url": "https://example.io",
     "author": "小陈",
     "description": "后端与运维笔记：分布式系统、数据库调优，以及那些踩过的生产事故。",
-    "tags": ["技术", "后端", "运维"],
+    "tags": [
+      "技术",
+      "后端",
+      "运维"
+    ],
     "tech": "WordPress",
     "feed": "https://example.io/feed",
     "added": "2026-06-22",
-    "updated": "2026-09-14"
+    "updated": "2026-09-14",
+    "feedError": "fetch failed"
   },
   {
     "name": "旧日手账",
     "url": "https://example.info",
     "author": "老站主",
     "description": "域名还在，内容还在，只是很久没有更新了。单独放在异常名录里，留个念想。",
-    "tags": ["生活", "随笔"],
+    "tags": [
+      "生活",
+      "随笔"
+    ],
     "tech": "Hexo",
     "added": "2024-01-15",
     "updated": "2025-03-02",
